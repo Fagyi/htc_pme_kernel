@@ -81,7 +81,8 @@ void mcs_spin_lock(struct mcs_spinlock **lock, struct mcs_spinlock *node)
 	ACCESS_ONCE(prev->next) = node;
 
 	/* Wait until the lock holder passes the lock down. */
-	arch_mcs_spin_lock_contended(&node->locked);
+	while (!cpu_relaxed_read(&(node->locked)))
+		cpu_read_relax();
 }
 
 /*
@@ -100,8 +101,8 @@ void mcs_spin_unlock(struct mcs_spinlock **lock, struct mcs_spinlock *node)
 		if (likely(cmpxchg(lock, node, NULL) == node))
 			return;
 		/* Wait until the next pointer is set */
-		while (!(next = ACCESS_ONCE(node->next)))
-			cpu_relax_lowlatency();
+		while (!(next = (struct mcs_spinlock*)(cpu_relaxed_read_long(&(node->next)))))
+			cpu_read_relax();
 	}
 
 	/* Pass lock to next waiter. */
