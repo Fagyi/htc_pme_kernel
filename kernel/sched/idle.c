@@ -153,6 +153,7 @@ static void cpuidle_idle_call(void)
 
 	/* Take note of the planned idle state. */
 	idle_set_state(this_rq(), &drv->states[next_state]);
+	idle_set_state_idx(this_rq(), next_state);
 
 	/*
 	 * Enter the idle state previously returned by the governor decision.
@@ -163,6 +164,7 @@ static void cpuidle_idle_call(void)
 
 	/* The cpu is no longer idle or about to enter idle. */
 	idle_set_state(this_rq(), NULL);
+	idle_set_state_idx(this_rq(), -1);
 
 	if (broadcast)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT, &dev->cpu);
