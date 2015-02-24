@@ -78,5 +78,5 @@ obj-$(CONFIG_VIB_TRIGGERS)	+= vib-triggers.o
 obj-$(CONFIG_FORCE_FAST_CHARGE)		+= fastcharge/
 
 obj-$(CONFIG_SOUND_CONTROL)		+= sound_control.o
-
 obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
+obj-$(CONFIG_BLUEDROID_PM)      += bluedroid_pm.o
