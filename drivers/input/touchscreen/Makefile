@@ -97,3 +97,4 @@ obj-$(CONFIG_TOUCHSCREEN_CYPRESS_CAP)	+= cypress_cap.o
 obj-$(CONFIG_TOUCHSCREEN_MAX1187X)	+= max1187x.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_HTC) += synaptics_dsx_htc/
 obj-$(CONFIG_TOUCHSCREEN_TOUCH_FW_UPDATE) += touch_fw_update.o
+obj-$(CONFIG_SWEEP2SLEEP)		+= sweep2sleep.o
