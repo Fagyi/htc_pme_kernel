@@ -1130,6 +1130,7 @@ static const u32 prio_to_wmult[40] = {
 #define DEQUEUE_MIGRATING	0x08
 
 #define ENQUEUE_WAKEUP		0x01
+#define ENQUEUE_WAKEUP_NEW	0x20
 #define ENQUEUE_RESTORE		0x02
 #define ENQUEUE_MOVE		0x04
 
@@ -1140,7 +1141,6 @@ static const u32 prio_to_wmult[40] = {
 #else
 #define ENQUEUE_WAKING		0x00
 #endif
-#define ENQUEUE_MIGRATING	0x40
 
 #define RETRY_TASK		((void *)-1UL)
 
