@@ -5988,7 +5988,7 @@ static int __tasha_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 static int tasha_codec_ldo_h_control(struct snd_soc_dapm_widget *w,
 				     int event)
 {
-	struct snd_soc_codec *codec = w->codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
 
 	if (SND_SOC_DAPM_EVENT_ON(event)) {
@@ -6017,7 +6017,7 @@ static int tasha_codec_force_enable_ldo_h(struct snd_soc_dapm_widget *w,
 					  struct snd_kcontrol *kcontrol,
 					  int event)
 {
-	struct snd_soc_codec *codec = w->codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	struct tasha_priv *tasha = snd_soc_codec_get_drvdata(codec);
 
 	switch (event) {
@@ -6072,14 +6072,16 @@ static int tasha_codec_enable_standalone_ldo_h(struct snd_soc_codec *codec,
 	int rc;
 
 	if (enable)
-		rc = snd_soc_dapm_force_enable_pin(&codec->dapm,
-						   DAPM_LDO_H_STANDALONE);
+		rc = snd_soc_dapm_force_enable_pin(
+					snd_soc_codec_get_drvdata(codec),
+					DAPM_LDO_H_STANDALONE);
 	else
-		rc = snd_soc_dapm_disable_pin(&codec->dapm,
-					      DAPM_LDO_H_STANDALONE);
+		rc = snd_soc_dapm_disable_pin(
+					snd_soc_codec_get_drvdata(codec),
+					DAPM_LDO_H_STANDALONE);
 
 	if (!rc)
-		snd_soc_dapm_sync(&codec->dapm);
+		snd_soc_dapm_sync(snd_soc_codec_get_drvdata(codec));
 	else
 		dev_err(codec->dev, "%s: ldo_h force %s pin failed\n",
 			__func__, (enable ? "enable" : "disable"));
