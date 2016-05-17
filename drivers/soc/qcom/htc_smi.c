@@ -28,8 +28,7 @@
 #include <linux/delay.h>
 #include <uapi/linux/htc_smi.h>
 #include <soc/qcom/scm.h>
-//#include qseecom_kernel.h"
-#include <qseecom_kernel_htc.h>
+#include "qseecom_kernel_htc.h"
 
 #include <soc/qcom/msm_qmi_interface.h>
 #define HTC_SMI_SNS_SERVICE_ID		0x138 /* From sns_common_v01.idl */

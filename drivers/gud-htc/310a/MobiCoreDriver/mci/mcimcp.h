@@ -15,7 +15,7 @@
 #ifndef MCP_H_
 #define MCP_H_
 
-#include "mci/mcloadformat.h"
+#include "mcloadformat.h"
 
 #define FLAG_RESPONSE		BIT(31)
 
