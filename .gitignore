@@ -116,4 +116,4 @@ x509.genkey
 # Kconfig presets
 all.config
 
-# NEBULA: Michael Harrell <eliminater74@gmail.com> (The Nebula Project: Project EAS: Started 04/07/2017)
+pmekernel.sh

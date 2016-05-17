@@ -14,7 +14,7 @@
 #ifndef MCIFC_H_
 #define MCIFC_H_
 
-#include "platform.h"
+#include "../platform.h"
 
 
 #define MC_FC_INVALID	((u32)0)  
