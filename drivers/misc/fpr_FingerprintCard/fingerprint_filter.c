@@ -246,7 +246,7 @@ static bool fpf_input_filter(struct input_handle *handle,
 	//standalone kernel mode. double tap means switch off
 	if (value > 0) {
 		if (!screen_on) {
-			fpf_pwrtrigger(0);
+			return false; // don't filter so pin appears
 		} else {
 			fingerprint_pressed = 1;
 			pr_info("fpf %s starting trigger \n",__func__);
@@ -257,11 +257,11 @@ static bool fpf_input_filter(struct input_handle *handle,
 		if (fingerprint_pressed) {
 			if (!screen_on) {
 				if (!powering_down_with_fingerprint_still_pressed) {
-					// fingerprint release happens normally, started (pressed) while screen asleep, and ended while asleep, so let's turn it on....
-					fpf_pwrtrigger(1);
+					return false; // don't filter so pin appears
 				} else {
 					// fingerprint release happens after a screen off that started AFTER the fingerprint was pressed. So do not wake the screen
 					powering_down_with_fingerprint_still_pressed = 0;
+					return false;
 				}
 			} else {
 				// screen is on...
@@ -280,6 +280,9 @@ static bool fpf_input_filter(struct input_handle *handle,
 				}
 			}
 			return true;
+		} else 
+		{ // let even flow through
+			return false;
 		}
 	}
 	}
