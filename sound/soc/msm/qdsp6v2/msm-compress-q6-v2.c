@@ -539,13 +539,14 @@ static void compr_event_handler(uint32_t opcode,
 		if (!atomic_read(&prtd->start)) {
 			/* Writes must be restarted from _copy() */
 			pr_debug("write_done received while not started, treat as xrun");
-			atomic_set(&prtd->xrun, 1);
 //HTC_AUD_START
 			if (atomic_read(&prtd->drain)) {
 				pr_debug("write_done received while not started and wait drain buffer. Set drain_done_pending as 1\n");
 				atomic_set(&prtd->drain_done_pendding, 1);
 			}
 //HTC_AUD_END
+			if (prtd->dsp_fragments_sent == 0)
+				atomic_set(&prtd->xrun, 1);
 			spin_unlock_irqrestore(&prtd->lock, flags);
 			break;
 		}
@@ -710,16 +711,20 @@ static void compr_event_handler(uint32_t opcode,
 			 * WRITE_DONE(X)
 			 * RESUME
 			 */
-			if ((prtd->copied_total == prtd->bytes_sent) &&
-			    atomic_read(&prtd->drain)) {
-				pr_debug("RUN ack, wake up & continue pending drain\n");
+			if (prtd->copied_total == prtd->bytes_sent) {
+				if (atomic_read(&prtd->drain)) {
+					pr_debug("RUN ack, wake up & continue pending drain\n");
 
-				if (prtd->last_buffer)
-					prtd->last_buffer = 0;
+					if (prtd->last_buffer)
+						prtd->last_buffer = 0;
 
-				prtd->drain_ready = 1;
-				wake_up(&prtd->drain_wait);
-				atomic_set(&prtd->drain, 0);
+					prtd->drain_ready = 1;
+					wake_up(&prtd->drain_wait);
+					atomic_set(&prtd->drain, 0);
+				} else if (prtd->dsp_fragments_sent) {
+					pr_info("RUN ack, resume for pending frames\n");
+					msm_compr_send_buffer(prtd);
+				}
 			}
 
 			spin_unlock_irqrestore(&prtd->lock, flags);
