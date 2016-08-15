@@ -78,3 +78,4 @@ obj-$(CONFIG_VIB_TRIGGERS)	+= vib-triggers.o
 # Fast Charge
 obj-$(CONFIG_FORCE_FAST_CHARGE)		+= fastcharge/
 
+obj-y				+= sound_control.o
