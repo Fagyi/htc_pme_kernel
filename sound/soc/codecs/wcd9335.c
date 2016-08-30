@@ -838,7 +838,6 @@ struct tasha_priv {
 
 	/* Lock to protect mclk enablement */
 	struct mutex mclk_lock;
-
 };
 
 static int tasha_codec_vote_max_bw(struct snd_soc_codec *codec,
@@ -14175,6 +14174,7 @@ err_clk:
 err_resmgr:
 	devm_kfree(&pdev->dev, cdc_pwr);
 err_cdc_pwr:
+	mutex_destroy(&tasha->mclk_lock);
 	devm_kfree(&pdev->dev, tasha);
 	return ret;
 }
