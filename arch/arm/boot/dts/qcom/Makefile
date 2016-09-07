@@ -146,6 +146,8 @@ dtb-$(CONFIG_ARCH_MSM8996) += \
 	msm8996-v3-htc_pmewhl-xd.dtb \
 	msm8996-v3-htc_pmewhl-pvt.dtb \
 	msm8996-v3-htc_pmeuhljapan-pvt.dtb \
+	msm8996-v3-htc_pmewhl-xd.dtb \
+	msm8996-v3-htc_pmewhl-pvt.dtb \
 	msm8996pro-v1.1-htc_oce-xa.dtb \
 	msm8996pro-v1.1-htc_oce-xb.dtb \
 	msm8996pro-v1.1-htc_oce-xc.dtb \
