@@ -516,7 +516,7 @@ enum hvdcp_voters {
 	HVDCP_PULSING_VOTER,
 	NUM_HVDCP_VOTERS,
 };
-static int smbchg_debug_mask;
+static int smbchg_debug_mask = 0;
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -10833,6 +10833,14 @@ static int smbchg_probe(struct spmi_device *spmi)
 			chip->usb_present);
 		power_supply_set_present(chip->usb_psy, chip->usb_present);
 	}
+
+#ifdef CONFIG_HTC_BATT_PCN0006
+	if (get_kernel_flag() & KERNEL_FLAG_ENABLE_BMS_CHARGER_LOG)
+		smbchg_debug_mask = 0xFF;
+	else
+		smbchg_debug_mask = 0x06;
+	pr_debug("smbchg_debug_mask=0x%X\n",smbchg_debug_mask);
+#endif //CONFIG_HTC_BATT_PCN0006
 
 	rerun_hvdcp_det_if_necessary(chip);
 
