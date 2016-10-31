@@ -4477,7 +4477,7 @@ int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 	/* HTC_WIFI_START */
 	// ** [HPKB#28650] Reduce log size on non-debug ROM
 #if 0
-	PCIE_INFO(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
+	PCIE_DBG(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
 		dev->rc_idx);
 #else
 	PCIE_ERR_INTERNAL(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
@@ -4595,7 +4595,7 @@ int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 		/* HTC_WIFI_START */
 		// ** [HPKB#28650] Reduce log size on non-debug ROM
 #if 0
-		PCIE_INFO(dev, "PCIe RC%d PHY is ready!\n", dev->rc_idx);
+		PCIE_DBG(dev, "PCIe RC%d PHY is ready!\n", dev->rc_idx);
 #else
 		PCIE_ERR_INTERNAL(dev, "PCIe RC%d PHY is ready!\n", dev->rc_idx);
 #endif
@@ -4622,7 +4622,7 @@ int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 	/* HTC_WIFI_START */
 	// ** [HPKB#28650] Reduce log size on non-debug ROM
 #if 0
-	PCIE_INFO(dev, "PCIe: Release the reset of endpoint of RC%d.\n",
+	PCIE_DBG(dev, "PCIe: Release the reset of endpoint of RC%d.\n",
 		dev->rc_idx);
 #else
 	PCIE_ERR_INTERNAL(dev, "PCIe: Release the reset of endpoint of RC%d.\n",
@@ -4657,7 +4657,7 @@ int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 		/* HTC_WIFI_START */
 		// ** [HPKB#28650] Reduce log size on non-debug ROM
 #if 0
-		PCIE_INFO(dev, "PCIe RC%d link initialized\n", dev->rc_idx);
+		PCIE_BDG(dev, "PCIe RC%d link initialized\n", dev->rc_idx);
 #else
 		PCIE_ERR_INTERNAL(dev, "PCIe RC%d link initialized\n", dev->rc_idx);
 #endif
@@ -4668,7 +4668,7 @@ int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 		/* HTC_WIFI_END */
 
 	} else {
-		PCIE_INFO(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
+		PCIE_DBG(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
 			dev->rc_idx);
 		gpio_set_value(dev->gpio[MSM_PCIE_GPIO_PERST].num,
 			dev->gpio[MSM_PCIE_GPIO_PERST].on);
@@ -4773,7 +4773,7 @@ void msm_pcie_disable(struct msm_pcie_dev_t *dev, u32 options)
 	/* HTC_WIFI_START */
 	// ** [HPKB#28650] Reduce log size on non-debug ROM
 #if 0
-	PCIE_INFO(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
+	PCIE_DBG(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
 		dev->rc_idx);
 #else
 	PCIE_ERR_INTERNAL(dev, "PCIe: Assert the reset of endpoint of RC%d.\n",
@@ -6597,8 +6597,8 @@ module_exit(pcie_exit);
 /* RC do not represent the right class; set it to PCI_CLASS_BRIDGE_PCI */
 static void msm_pcie_fixup_early(struct pci_dev *dev)
 {
-	struct msm_pcie_dev_t *pcie_dev = PCIE_BUS_PRIV_DATA(dev->bus);
-	PCIE_DBG(pcie_dev, "hdr_type %d\n", dev->hdr_type);
+	PCIE_DBG((struct msm_pcie_dev_t*)PCIE_BUS_PRIV_DATA(dev), "hdr_type %d\n",
+		dev->hdr_type);
 	if (dev->hdr_type == 1)
 		dev->class = (dev->class & 0xff) | (PCI_CLASS_BRIDGE_PCI << 8);
 }
