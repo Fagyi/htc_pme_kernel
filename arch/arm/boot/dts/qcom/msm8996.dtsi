@@ -1792,7 +1792,6 @@
 		interrupts = <0 28 0>, <0 29 0>;
 		qcom,bark-time = <18000>;
 		qcom,pet-time = <8000>;
-		qcom,ipi-ping;
 		qcom,wakeup-enable;
 	};
 
