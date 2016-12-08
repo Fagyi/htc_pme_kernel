@@ -36,7 +36,7 @@ obj-$(CONFIG_SND_SOC_MSM8996) += htc_acoustic_alsa.o
 #HTC_AUD_END
 
 # for MDM Californium sound card driver
-snd-soc-mdmcalifornium-objs := mdmcalifornium.o
+snd-soc-mdmcalifornium-objs := mdmcalifornium.o mdmcalifornium-auto.o
 obj-$(CONFIG_SND_SOC_MDMCALIFORNIUM) += snd-soc-mdmcalifornium.o
 
 # for MDM 9607 sound card driver
