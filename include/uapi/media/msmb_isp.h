@@ -344,6 +344,7 @@ struct msm_vfe_axi_stream_cfg_cmd {
 	enum msm_vfe_axi_stream_cmd cmd;
 	uint8_t sync_frame_id_src;
 	enum msm_vfe_hw_state hw_state;
+	uint32_t reduce_timeout;
 };
 
 enum msm_vfe_axi_stream_update_type {
