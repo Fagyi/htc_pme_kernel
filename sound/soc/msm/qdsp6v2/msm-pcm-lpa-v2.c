@@ -463,7 +463,14 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 		dir = IN;
 		atomic_set(&prtd->pending_buffer, 0);
 
-		q6asm_cmd(prtd->audio_client, CMD_CLOSE);
+		if (prtd->session_id) {
+			rc = q6asm_cmd(prtd->audio_client, CMD_CLOSE);
+			if (rc < 0) {
+				pr_err("%s: error: ASM close failed returned %d\n",
+					__func__, rc);
+				goto done;
+			}
+		}
 		q6asm_audio_client_buf_free_contiguous(dir,
 				prtd->audio_client);
 
@@ -480,7 +487,8 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	kfree(prtd);
 	runtime->private_data = NULL;
 
-	return 0;
+done:
+	return rc;
 }
 
 static int msm_pcm_close(struct snd_pcm_substream *substream)
@@ -544,7 +552,8 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct snd_dma_buffer *dma_buf = &substream->dma_buffer;
 	struct audio_buffer *buf;
 	uint16_t bits_per_sample = 16;
-	int dir, ret;
+	int dir;
+	int ret = 0;
 
 	struct asm_softpause_params softpause = {
 		.enable = SOFT_PAUSE_ENABLE,
@@ -566,17 +575,26 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 				FORMAT_LINEAR_PCM, bits_per_sample);
 		if (ret < 0) {
 			pr_err("%s: pcm out open failed\n", __func__);
-			q6asm_audio_client_free(prtd->audio_client);
-			prtd->audio_client = NULL;
 			return -ENOMEM;
 		}
 	}
 
 	pr_debug("%s: session ID %d\n", __func__, prtd->audio_client->session);
 	prtd->session_id = prtd->audio_client->session;
-	msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->be_id,
+	ret = msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->be_id,
 		prtd->audio_client->perf_mode,
 		prtd->session_id, substream->stream);
+	if (ret) {
+		pr_err("%s: stream reg failed ret:%d\n", __func__, ret);
+		ret = q6asm_cmd(prtd->audio_client, CMD_CLOSE);
+		if (ret < 0) {
+			pr_err("%s: error: ASM close failed returned %d\n",
+				__func__, ret);
+			goto done;
+		}
+		prtd->session_id = 0;
+		goto done;
+	}
 
 	ret = q6asm_set_softpause(prtd->audio_client, &softpause);
 	if (ret < 0)
@@ -616,7 +634,8 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 		return -ENOMEM;
 
 	snd_pcm_set_runtime_buffer(substream, &substream->dma_buffer);
-	return 0;
+done:
+	return ret;
 }
 
 static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
