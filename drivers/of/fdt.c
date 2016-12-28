@@ -925,7 +925,7 @@ static const char *config_cmdline = "";
 int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 				     int depth, void *data)
 {
-	int l = 0;
+	unsigned long l = 0;
 	const char *p = NULL;
 	char *cmdline = data;
 
@@ -943,7 +943,7 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 
 	/* Retrieve command line unless forcing */
 	if (read_dt_cmdline)
-		p = of_get_flat_dt_prop(node, "bootargs", &l);
+		p = of_get_flat_dt_prop(node, "bootargs", (int *)&l);
 
 	if (p != NULL && l > 0) {
 		if (concat_cmdline) {
