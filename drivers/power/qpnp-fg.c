@@ -1996,10 +1996,11 @@ static void fg_handle_battery_insertion(struct fg_chip *chip)
 	reinit_completion(&chip->batt_id_avail);
 	reinit_completion(&chip->fg_reset_done);
 	queue_delayed_work(system_power_efficient_wq,
-		&chip->batt_profile_init, 0);
+	&chip->batt_profile_init, 0);
 	cancel_delayed_work(&chip->update_sram_data);
 	queue_delayed_work(system_power_efficient_wq,
-		&chip->update_sram_data, msecs_to_jiffies(0));
+	&chip->update_sram_data, 
+	msecs_to_jiffies(0));
 }
 
 
@@ -2709,9 +2710,9 @@ try_again:
 		chip->last_beat_count = beat_count;
 	}
 resched:
-	queue_delayed_work(system_power_efficient_wq,
-		&chip->check_sanity_work,
-		msecs_to_jiffies(SANITY_CHECK_PERIOD_MS));
+    queue_delayed_work(system_power_efficient_wq,
+        &chip->check_sanity_work,
+        msecs_to_jiffies(SANITY_CHECK_PERIOD_MS));
 out:
 	fg_relax(&chip->sanity_wakeup_source);
 }
@@ -8551,7 +8552,7 @@ out:
 	update_temp_data(&chip->update_temp_work.work);
 	queue_delayed_work(system_power_efficient_wq,
 		&chip->check_sanity_work,
-		msecs_to_jiffies(1000));
+			msecs_to_jiffies(1000));
 	chip->ima_error_handling = false;
 #ifdef CONFIG_HTC_BATT_PCN0002
 	g_is_ima_error_handling = false;
