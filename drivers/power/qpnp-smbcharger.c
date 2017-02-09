@@ -2394,7 +2394,8 @@ static bool is_hvdcp_present(struct smbchg_chip *chip)
 		&& is_usb_present(chip)) {
 		if (delayed_work_pending(&chip->rerun_apsd_work))
 			cancel_delayed_work(&chip->rerun_apsd_work);
-		schedule_delayed_work(&chip->rerun_apsd_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->rerun_apsd_work,
 				msecs_to_jiffies(HVDCP_DETECT_FAILED_RETRY_MS));
 		pr_smb(PR_STATUS, "Schedule RERUN APSD for hvdcp_present detect failed.\n");
 	}
@@ -2929,7 +2930,8 @@ static void smbchg_parallel_usb_en_work(struct work_struct *work)
 	return;
 
 recheck:
-	schedule_delayed_work(&chip->parallel_en_work, 0);
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->parallel_en_work, 0);
 }
 
 static void smbchg_parallel_usb_check_ok(struct smbchg_chip *chip)
@@ -2940,7 +2942,8 @@ static void smbchg_parallel_usb_check_ok(struct smbchg_chip *chip)
 		return;
 
 	smbchg_stay_awake(chip, PM_PARALLEL_CHECK);
-	schedule_delayed_work(&chip->parallel_en_work, 0);
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->parallel_en_work, 0);
 }
 
 static int charging_suspend_vote_cb(struct device *dev, int suspend,
@@ -3876,7 +3879,8 @@ static void smbchg_vfloat_adjust_check(struct smbchg_chip *chip)
 
 	smbchg_stay_awake(chip, PM_REASON_VFLOAT_ADJUST);
 	pr_smb(PR_STATUS, "Starting vfloat adjustments\n");
-	schedule_delayed_work(&chip->vfloat_adjust_work, 0);
+		queue_delayed_work(system_power_efficient_wq,
+		&chip->vfloat_adjust_work, 0);
 }
 
 #define FV_STS_REG			0xC
@@ -4998,7 +5002,8 @@ stop:
 	return;
 
 reschedule:
-	schedule_delayed_work(&chip->vfloat_adjust_work,
+	queue_delayed_work(system_power_efficient_wq,
+		&chip->vfloat_adjust_work,
 			msecs_to_jiffies(VFLOAT_RESAMPLE_DELAY_MS));
 	return;
 }
@@ -5170,7 +5175,8 @@ void pmi8996_set_dcp_default(void)
 			pr_err("Couldn't disable input missing poller rc=%d\n", rc);
 		if (delayed_work_pending(&the_chip->iusb_5v_2a_detect_work))
 			cancel_delayed_work(&the_chip->iusb_5v_2a_detect_work);
-		schedule_delayed_work(&the_chip->iusb_5v_2a_detect_work,
+		queue_delayed_work(system_power_efficient_wq,
+		&the_chip->iusb_5v_2a_detect_work,
 				msecs_to_jiffies(AICL_5V_2A_DETECT_DELAY_MS));
 	}
 }
@@ -5313,14 +5319,16 @@ static void smbchg_chk_cable_workable_work(struct work_struct *work)
 	read_usb_type(the_chip, &usb_type_name, &usb_supply_type);
 	if ((g_typec_workable == -1) && (s_re_chk_cnt < 3) &&
 			(usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP)) {
-		schedule_delayed_work(&the_chip->chk_cable_workable_work,
+		queue_delayed_work(system_power_efficient_wq,
+		&the_chip->chk_cable_workable_work,
 					msecs_to_jiffies(CHK_CABLE_HVDCP_NOTIFY_MS));
 		s_re_chk_cnt ++;
 		pr_smb(PR_STATUS, "recheck cable workable: %d\n", s_re_chk_cnt);
 	} else {
 		if (!the_chip->hvdcp_not_supported &&
 				(usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP)) {
-			schedule_delayed_work(&the_chip->hvdcp_det_work,
+			queue_delayed_work(system_power_efficient_wq,
+			&the_chip->hvdcp_det_work,
 						msecs_to_jiffies(CHK_CABLE_HVDCP_NOTIFY_MS));
 		}
 		s_re_chk_cnt = 0;
@@ -5368,7 +5376,8 @@ static void smbchg_hvdcp_det_work(struct work_struct *work)
 				pr_err("Couldn't disable input missing poller rc=%d\n", rc);
 			if (delayed_work_pending(&chip->iusb_5v_2a_detect_work))
 				cancel_delayed_work(&chip->iusb_5v_2a_detect_work);
-			schedule_delayed_work(&chip->iusb_5v_2a_detect_work,
+				queue_delayed_work(system_power_efficient_wq,
+					&chip->iusb_5v_2a_detect_work,
 					msecs_to_jiffies(AICL_5V_2A_DETECT_DELAY_MS));
 		}
 		g_is_hvdcp_detect_done = true;
@@ -5552,7 +5561,8 @@ static void smbchg_downgrade_iusb_work(struct work_struct *work)
 			current_aicl, vbus, hard_limit);
 		vote(chip->usb_icl_votable, PSY_ICL_VOTER, true,
 			chip->tables.usb_ilim_ma_table[downgrade_index]);
-		schedule_delayed_work(&chip->downgrade_iusb_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->downgrade_iusb_work,
 				msecs_to_jiffies(AICL_DOWNGRADE_IUSB_DELAY_MS));
 		return;
 	} else {
@@ -5606,7 +5616,8 @@ static void smbchg_iusb_5v_2a_detect_work(struct work_struct *work)
 		g_is_charger_ability_detected = true;
 		if (delayed_work_pending(&chip->downgrade_iusb_work))
 			cancel_delayed_work_sync(&chip->downgrade_iusb_work);
-		schedule_delayed_work(&chip->downgrade_iusb_work, 0);
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->downgrade_iusb_work, 0);
 		return;
 	}
 
@@ -5618,7 +5629,8 @@ static void smbchg_iusb_5v_2a_detect_work(struct work_struct *work)
 			current_aicl, vbat_mv, vbus, hard_limit);
 		vote(chip->usb_icl_votable, PSY_ICL_VOTER, true,
 			chip->tables.usb_ilim_ma_table[upgrade_index]);
-		schedule_delayed_work(&chip->iusb_5v_2a_detect_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->iusb_5v_2a_detect_work,
 				msecs_to_jiffies(AICL_5V_2A_DETECT_DELAY_MS));
 		return;
 	} else {
@@ -5827,7 +5839,8 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 		smbchg_set_hvdcp_enable(chip, false);
 		if (usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP){
 			g_is_cable_workable_detect = true;
-			schedule_delayed_work(&chip->chk_cable_workable_work,
+			queue_delayed_work(system_power_efficient_wq,
+			&chip->chk_cable_workable_work,
 					msecs_to_jiffies(CHK_CABLE_WORKABLE_DELAY_MS));
 		}
 	}
@@ -5880,7 +5893,8 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 			(usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP)) {
 		cancel_delayed_work_sync(&chip->hvdcp_det_work);
 		smbchg_stay_awake(chip, PM_DETECT_HVDCP);
-		schedule_delayed_work(&chip->hvdcp_det_work,
+		queue_delayed_work(system_power_efficient_wq,
+			&chip->hvdcp_det_work,
 					msecs_to_jiffies(HVDCP_NOTIFY_MS));
 	}
 #endif //CONFIG_HTC_BATT_WA_PCN0017
@@ -6052,7 +6066,8 @@ static void increment_aicl_count(struct smbchg_chip *chip)
 			/* Set the USB max current limit to 1500mA after 1 minute */
 			if (delayed_work_pending(&chip->usb_limit_max_current))
 				cancel_delayed_work(&chip->usb_limit_max_current);
-			schedule_delayed_work(&chip->usb_limit_max_current,
+			queue_delayed_work(system_power_efficient_wq,
+				&chip->usb_limit_max_current,
 				msecs_to_jiffies(INTERVAL_1_MINUTE_MS));
 #else
 			pr_smb(PR_INTERRUPT, "Disable AICL rerun\n");
@@ -6242,7 +6257,8 @@ static void smbchg_handle_hvdcp3_disable(struct smbchg_chip *chip)
 		read_usb_type(chip, &usb_type_name, &usb_supply_type);
 		smbchg_change_usb_supply_type(chip, usb_supply_type);
 		if (usb_supply_type == POWER_SUPPLY_TYPE_USB_DCP)
-			schedule_delayed_work(&chip->hvdcp_det_work,
+			queue_delayed_work(system_power_efficient_wq,
+				&chip->hvdcp_det_work,
 				msecs_to_jiffies(HVDCP_NOTIFY_MS));
 	} else {
 		smbchg_change_usb_supply_type(chip, POWER_SUPPLY_TYPE_UNKNOWN);
@@ -7946,8 +7962,8 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 		if ((chip->usb_supply_type == POWER_SUPPLY_TYPE_USB_HVDCP) ||
 			(chip->usb_supply_type == POWER_SUPPLY_TYPE_USB_HVDCP_3)){
 			cancel_delayed_work_sync(&chip->force_hvdcp_work);
-			schedule_delayed_work(&chip->force_hvdcp_work,
-						msecs_to_jiffies(300));
+			queue_delayed_work(system_power_efficient_wq,
+				&chip->force_hvdcp_work, msecs_to_jiffies(300));
 			goto out;
 		}
 #endif //CONFIG_HTC_BATT_WA_PCN0013
@@ -10588,7 +10604,8 @@ static void rerun_hvdcp_det_if_necessary(struct smbchg_chip *chip)
 		if (!chip->hvdcp_not_supported) {
 			cancel_delayed_work_sync(&chip->hvdcp_det_work);
 			smbchg_stay_awake(chip, PM_DETECT_HVDCP);
-			schedule_delayed_work(&chip->hvdcp_det_work,
+			queue_delayed_work(system_power_efficient_wq,
+			&chip->hvdcp_det_work,
 					msecs_to_jiffies(HVDCP_NOTIFY_MS));
 		}
 	}
