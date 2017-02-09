@@ -92,7 +92,7 @@ bool g_flag_disable_safety_timer;
 /* Disable battery temperature hot/cold protection*/
 bool g_flag_disable_temp_protection;
 /* Enable batterydebug log*/
-bool g_flag_enable_batt_debug_log;
+bool g_flag_enable_pr_err_log;
 /* is battery fully charged with charging stopped */
 bool g_flag_ats_limit_chg;
 #endif //CONFIG_HTC_BATT_PCN0006
@@ -194,18 +194,6 @@ enum {
 };
 #endif //CONFIG_HTC_BATT_PCN0021
 
-#ifdef CONFIG_HTC_BATT_PCN0006
-#define BATT_DEBUG(x...) do { \
-	if (g_flag_enable_batt_debug_log) \
-		printk(KERN_INFO"[BATT] " x); \
-	else	\
-		printk(KERN_DEBUG"[BATT] " x); \
-} while (0)
-#else
-#define BATT_DEBUG(x...) do { \
-	printk(KERN_DEBUG"[BATT] " x); \
-} while (0)
-#endif //CONFIG_HTC_BATT_PCN0006
 
 struct dec_level_by_current_ua {
 	int threshold_ua;
@@ -281,7 +269,7 @@ static int is_bounding_fully_charged_level(void)
 
 static void batt_set_check_timer(u32 seconds)
 {
-	pr_debug("[BATT] %s(%u sec)\n", __func__, seconds);
+	pr_err("[BATT] %s(%u sec)\n", __func__, seconds);
 	mod_timer(&htc_batt_timer.batt_timer,
 			jiffies + msecs_to_jiffies(seconds * 1000));
 }
@@ -328,7 +316,7 @@ static void batt_check_overload(unsigned long time_since_last_update_ms)
 	static unsigned long time_accumulation = 0;
 	static unsigned int s_prev_level_raw = 0;
 
-	pr_debug("[BATT] Chk overload by CS=%d V=%d I=%d count=%d overload=%d "
+	pr_err("[BATT] Chk overload by CS=%d V=%d I=%d count=%d overload=%d "
 			"is_full=%d\n",
 			htc_batt_info.rep.charging_source, htc_batt_info.rep.batt_vol,
 			htc_batt_info.rep.batt_current, overload_count, htc_batt_info.rep.overload,
@@ -478,7 +466,7 @@ static void batt_check_critical_low_level(int *dec_level, int batt_current)
 		if (batt_current > g_dec_level_curr_table[i].threshold_ua) {
 			*dec_level = g_dec_level_curr_table[i].dec_level;
 
-			pr_debug("%s: i=%d, dec_level=%d, threshold_ua=%d\n",
+			pr_err("%s: i=%d, dec_level=%d, threshold_ua=%d\n",
 				__func__, i, *dec_level, g_dec_level_curr_table[i].threshold_ua);
 			break;
 		}
@@ -589,7 +577,7 @@ static void batt_level_adjust(unsigned long time_since_last_update_ms)
 		if (time_accumulated_level_change < DISCHG_UPDATE_PERIOD_MS
 				&& !s_first) {
 			/* level should keep the previous one */
-			BATT_DEBUG("%s: total_time since last batt level update = %lu ms.",
+			pr_err("%s: total_time since last batt level update = %lu ms.",
 			__func__, time_accumulated_level_change);
 			htc_batt_info.rep.level = htc_batt_info.prev.level;
 			s_store_level += drop_raw_level;
@@ -680,7 +668,7 @@ static void batt_level_adjust(unsigned long time_since_last_update_ms)
 			if ((s_allow_drop_one_percent_flag == false)
 					&& (drop_raw_level == 0)) {
 				htc_batt_info.rep.level = htc_batt_info.prev.level;
-				BATT_DEBUG("%s: remap: no soc drop and no additional 1%%,"
+				pr_err("%s: remap: no soc drop and no additional 1%%,"
 						" ui:%d%%\n", __func__, htc_batt_info.rep.level);
 			} else if ((s_allow_drop_one_percent_flag == true)
 					&& (drop_raw_level == 0)
@@ -814,7 +802,7 @@ static void batt_level_adjust(unsigned long time_since_last_update_ms)
 				if (htc_batt_info.rep.level > 100)
 					htc_batt_info.rep.level = 100;
 			} else {
-				BATT_DEBUG("%s: pre_level=%d, new_level=%d, "
+				pr_err("%s: pre_level=%d, new_level=%d, "
 					"level would use raw level!\n", __func__,
 					htc_batt_info.prev.level, htc_batt_info.rep.level);
 			}
@@ -1624,7 +1612,7 @@ static void batt_worker(struct work_struct *work)
 	cur_jiffies = jiffies;
 	time_since_last_update_ms = htc_batt_timer.total_time_ms +
 		((cur_jiffies - htc_batt_timer.batt_system_jiffies) * MSEC_PER_SEC / HZ);
-	BATT_DEBUG("%s: total_time since last batt update = %lu ms.\n",
+	pr_err("%s: total_time since last batt update = %lu ms.\n",
 				__func__, time_since_last_update_ms);
 	htc_batt_timer.total_time_ms = 0; /* reset total time */
 	htc_batt_timer.batt_system_jiffies = cur_jiffies;
@@ -2376,7 +2364,7 @@ void htc_stats_calculate_statistics_data(int category, unsigned long chg_time, u
     }
     else
     {
-        BATT_DEBUG("%s: statistics_%s: This sampling is invalid, chg_time=%ld, dischg_time=%ld\n",
+        pr_err("%s: statistics_%s: This sampling is invalid, chg_time=%ld, dischg_time=%ld\n",
             HTC_STATISTICS,
             htc_stats_category2str(category),
             chg_time,
@@ -2385,7 +2373,7 @@ void htc_stats_calculate_statistics_data(int category, unsigned long chg_time, u
 
     if (category_ptr->sample_count >= HTC_STATS_SAMPLE_NUMBER)
     {
-        BATT_DEBUG("%s: statistics_%s: group=%s, chg_time_sum=%ld, dischg_time_sum=%ld, sample_count=%d\n",
+        pr_err("%s: statistics_%s: group=%s, chg_time_sum=%ld, dischg_time_sum=%ld, sample_count=%d\n",
             HTC_STATISTICS,
             htc_stats_category2str(category),
             htc_stats_classify(category_ptr->dischg_time_sum, category_ptr->sample_count),
@@ -2407,13 +2395,7 @@ void htc_stats_update_charging_statistics(int latest, int prev)
     char time_str[25];
     long dischg_time = 0L;
     long chg_time = 0L;
-    char debug[10] = "[debug]";
     bool debug_flag = false;
-
-    if (debug_flag) {
-        BATT_DEBUG("%s: %s update_charging_statistics(): prev=%d, now=%d\n",
-            HTC_STATISTICS, debug, prev, latest);
-    }
 
     do_gettimeofday(&rtc_now);
     time_to_tm(rtc_now.tv_sec, 0, &time_info);
@@ -2435,7 +2417,7 @@ void htc_stats_update_charging_statistics(int latest, int prev)
             // Collect battery info for end uncharging
             dischg_time = rtc_now.tv_sec - g_htc_stats_data.end_chg_time;
             if (dischg_time < 0) dischg_time = 0L;
-            BATT_DEBUG("%s: sampling: dischg_time=%ld(s), level=%d->%d, prev_chg_time=%ld(s)\n",
+            pr_err("%s: sampling: dischg_time=%ld(s), level=%d->%d, prev_chg_time=%ld(s)\n",
                 HTC_STATISTICS,
                 dischg_time,
                 g_htc_stats_data.end_chg_batt_level,
@@ -2460,7 +2442,7 @@ void htc_stats_update_charging_statistics(int latest, int prev)
         g_htc_stats_data.begin_chg_time = rtc_now.tv_sec;
         g_htc_stats_data.begin_chg_batt_level = htc_batt_info.rep.level;
 
-        BATT_DEBUG("%s: begin charging: level=%d, at=%s\n",
+        pr_err("%s: begin charging: level=%d, at=%s\n",
             HTC_STATISTICS,
             g_htc_stats_data.begin_chg_batt_level,
             time_str);
@@ -2475,7 +2457,7 @@ void htc_stats_update_charging_statistics(int latest, int prev)
         g_htc_stats_data.end_chg_time = rtc_now.tv_sec;
         g_htc_stats_data.end_chg_batt_level = htc_batt_info.rep.level;
 
-        BATT_DEBUG("%s: end charging: level=%d, at=%s\n",
+        pr_err("%s: end charging: level=%d, at=%s\n",
             HTC_STATISTICS,
             g_htc_stats_data.end_chg_batt_level,
             time_str);
@@ -3624,7 +3606,7 @@ static int __init htc_battery_init(void)
 		(htc_batt_info.k_debug_flag & KERNEL_FLAG_DISABLE_SAFETY_TIMER) ? 1 : 0;
 	g_flag_disable_temp_protection =
 		(htc_batt_info.k_debug_flag & KERNEL_FLAG_DISABLE_TBATT_PROTECT) ? 1 : 0;
-	g_flag_enable_batt_debug_log =
+	g_flag_enable_pr_err_log =
 		(htc_batt_info.k_debug_flag & KERNEL_FLAG_ENABLE_BMS_CHARGER_LOG) ? 1 : 0;
 	g_flag_ats_limit_chg =
 		(htc_batt_info.k_debug_flag & KERNEL_FLAG_ATS_LIMIT_CHARGE) ? 1 : 0;
