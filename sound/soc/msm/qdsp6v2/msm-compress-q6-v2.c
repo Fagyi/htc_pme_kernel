@@ -82,6 +82,7 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 #define STREAM_ARRAY_INDEX(stream_id) (stream_id - 1)
 
 #define MAX_NUMBER_OF_STREAMS 2
+
 //HTC_AUD_START
 struct wake_lock compr_lpa_q6_cb_wakelock;
 //HTC_AUD_END
