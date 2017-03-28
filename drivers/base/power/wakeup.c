@@ -473,7 +473,8 @@ static bool wakeup_source_blocker(struct wakeup_source *ws)
 	if (ws) {
 		wslen = strlen(ws->name);
 
-		if ((!enable_ipa_ws && !strncmp(ws->name, "IPA_WS", wslen)) ||
+		if ((!enable_ipa_ws && !strncmp(ws->name, "IPA_WS", wslen) &&
+				    ws->active) ||
 				(!enable_wlan_rx_wake_ws &&
 					!strncmp(ws->name, "wlan_rx_wake", wslen)) ||
 				(!enable_wlan_ctrl_wake_ws &&
@@ -486,6 +487,7 @@ static bool wakeup_source_blocker(struct wakeup_source *ws)
 					!strncmp(ws->name, "[timerfd]", wslen)) ||
 				(!enable_netlink_ws &&
 					!strncmp(ws->name, "NETLINK", wslen))) {
+
 			if (ws->active) {
 				wakeup_source_deactivate(ws);
 				pr_info("forcefully deactivate wakeup source: %s\n",
