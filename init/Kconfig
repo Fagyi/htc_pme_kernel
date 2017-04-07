@@ -1352,6 +1352,33 @@ config CC_OPTIMIZE_FOR_SIZE
 
 	  If unsure, say N.
 
+config CC_OPTIMIZE_MORE
+	bool "Optimize for size"
+	default y
+	help
+	  Enabling this option will pass "-O2" instead of "-Os" to gcc
+	  resulting in a smaller kernel.
+
+	  If unsure, say N.
+
+config CC_OPTIMIZE_ALOT
+	bool "Optimize for size"
+	default n
+	help
+	  Enabling this option will pass "-O3" instead of "-O2" to gcc
+	  resulting in a smaller kernel.
+
+	  If unsure, say N.
+
+config CC_OPTIMIZE_FAST
+	bool "Optimize for size"
+	default n
+	help
+	  Enabling this option will pass "-Ofast" instead of "-O3" to gcc
+	  resulting in a smaller kernel.
+
+	  If unsure, say N.
+
 config SYSCTL
 	bool
 
