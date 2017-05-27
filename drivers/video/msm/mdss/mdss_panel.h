@@ -619,17 +619,6 @@ struct mdss_panel_hdr_properties {
 	u32 peak_brightness;
 	/* Blackness level supported by panel */
 	u32 blackness_level;
-}
-
-struct htc_backlight1_table {
-	int size;
-	u16 *brt_data;
-	u16 *bl_data;
-};
-
-enum {
-	PANEL_POWER_CTRL_DEFAULT,
-	PANEL_POWER_CTRL_HX8396C2,
 };
 
 struct mdss_panel_info {
