@@ -170,3 +170,13 @@ obj-$(CONFIG_ESOC)		+= esoc/
 obj-$(CONFIG_BIF)		+= bif/
 
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
+
+# <t-base drivers
+obj-$(CONFIG_MOBICORE_DRIVER)	+= gud/
+
+# HTC Drivers
+obj-$(CONFIG_TRUSTONIC_TEE)	+= gud-htc/
+obj-$(CONFIG_HTC_DEBUG)		+= htc_debug/
+obj-$(CONFIG_HTC_LOGLEVEL)      += htc_loglevel/
+obj-$(CONFIG_HTC_MSM_SERIAL)    += htc_msm_serial/
+obj-y				+= htc_ril/

@@ -17,6 +17,7 @@
 
 #define HANDLE_TO_IDX(handle) (handle & 0xFF)
 #define ISP_SOF_DEBUG_COUNT 0
+
 static int msm_isp_update_dual_HW_ms_info_at_start(
 	struct vfe_device *vfe_dev,
 	enum msm_vfe_input_src stream_src,
@@ -948,6 +949,16 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 				pr_err("%s: PIX0 frame id: %u\n", __func__,
 				vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id);
 			vfe_dev->isp_sof_debug++;
+		//HTC_START
+		if ((vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id < 3)||
+			(vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id == 10)||
+			((vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id%50) == 0))
+		{
+			pr_info("[CAM]%s:(%d)PIX0 frame id: %u\n", __func__, vfe_dev->pdev->id,
+				vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id);
+		}
+		//HTC_END
+
 		} else if (frame_src == VFE_RAW_0) {
 			if (vfe_dev->isp_raw0_debug < ISP_SOF_DEBUG_COUNT)
 				pr_err("%s: RAW_0 frame id: %u\n", __func__,
@@ -2211,10 +2222,9 @@ static void msm_isp_update_camif_output_count(
 /*Factor in Q2 format*/
 #define ISP_DEFAULT_FORMAT_FACTOR 6
 #define ISP_BUS_UTILIZATION_FACTOR 6
-int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev,
-	enum msm_vfe_hw_state hw_state)
+static int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev)
 {
-	int i, rc = 0, frame_src, ms_type;
+	int i, rc = 0;
 	struct msm_vfe_axi_stream *stream_info;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
 	uint64_t total_pix_bandwidth = 0, total_rdi_bandwidth = 0;
@@ -2223,15 +2233,6 @@ int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev,
 
 	for (i = 0; i < VFE_AXI_SRC_MAX; i++) {
 		stream_info = &axi_data->stream_info[i];
-		frame_src = SRC_TO_INTF(stream_info->stream_src);
-		ms_type = vfe_dev->axi_data.src_info[frame_src].
-			dual_hw_ms_info.dual_hw_ms_type;
-		if (hw_state == HW_STATE_SLEEP) {
-			rc = msm_isp_update_bandwidth(
-				ISP_VFE0 + vfe_dev->pdev->id, 0, 0);
-			return rc;
-		}
-
 		if (stream_info->state == ACTIVE ||
 			stream_info->state == START_PENDING) {
 			if (stream_info->stream_src < RDI_INTF_0) {
@@ -2242,20 +2243,27 @@ int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev,
 			}
 		}
 	}
-
 	total_bandwidth = total_pix_bandwidth + total_rdi_bandwidth;
-		rc = msm_isp_update_bandwidth(ISP_VFE0 + vfe_dev->pdev->id,
-			(total_bandwidth + vfe_dev->hw_info->min_ab),
-			(total_bandwidth + vfe_dev->hw_info->min_ib));
+	rc = msm_isp_update_bandwidth(ISP_VFE0 + vfe_dev->pdev->id,
+		(total_bandwidth + vfe_dev->hw_info->min_ab),
+		(total_bandwidth + vfe_dev->hw_info->min_ib));
+
 	if (rc < 0)
 		pr_err("%s: update failed\n", __func__);
 
 	return rc;
 }
-
+//HTC_START
+#if 1
+static int msm_isp_axi_wait_for_cfg_done(struct vfe_device *vfe_dev,
+	enum msm_isp_camif_update_state camif_update,
+	uint32_t src_mask, int regUpdateCnt, uint32_t ReduceTimeout)
+#else
 static int msm_isp_axi_wait_for_cfg_done(struct vfe_device *vfe_dev,
 	enum msm_isp_camif_update_state camif_update,
 	uint32_t src_mask, int regUpdateCnt)
+#endif
+//HTC_END
 {
 	int rc;
 	unsigned long flags;
@@ -2280,6 +2288,16 @@ static int msm_isp_axi_wait_for_cfg_done(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.pipeline_update = camif_update;
 	}
 	spin_unlock_irqrestore(&vfe_dev->shared_data_lock, flags);
+//HTC_START
+	if(ReduceTimeout == 1)
+	{
+		pr_info("[CAM]%s:wait_for_completion_timeout reduce timeout 100ms\n", __func__);
+		rc = wait_for_completion_timeout(
+		&vfe_dev->stream_config_complete,
+		msecs_to_jiffies(100));
+	}
+	else
+//HTC_END
 	rc = wait_for_completion_timeout(
 		&vfe_dev->stream_config_complete,
 		msecs_to_jiffies(VFE_MAX_CFG_TIMEOUT));
@@ -2848,7 +2866,7 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 			}
 		}
 	}
-	msm_isp_update_stream_bandwidth(vfe_dev, stream_cfg_cmd->hw_state);
+	msm_isp_update_stream_bandwidth(vfe_dev);
 	vfe_dev->hw_info->vfe_ops.axi_ops.reload_wm(vfe_dev,
 		vfe_dev->vfe_base, wm_reload_mask);
 	msm_isp_update_camif_output_count(vfe_dev, stream_cfg_cmd);
@@ -2872,8 +2890,15 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 	}
 
 	if (wait_for_complete) {
+//HTC_START
+#if 1
+		rc = msm_isp_axi_wait_for_cfg_done(vfe_dev, camif_update,
+			src_mask, 2, 0);
+#else
 		rc = msm_isp_axi_wait_for_cfg_done(vfe_dev, camif_update,
 			src_mask, 2);
+#endif
+//HTC_END
 		if (rc < 0) {
 			pr_err("%s: wait for config done failed\n", __func__);
 			for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
@@ -2907,7 +2932,9 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	uint32_t src_mask = 0, intf, bufq_id = 0, bufq_handle = 0;
 	unsigned long flags;
 	struct msm_isp_timestamp timestamp;
-
+//HTC_START
+	uint32_t reduce_timeout = stream_cfg_cmd->reduce_timeout;
+//HTC_END
 	if (stream_cfg_cmd->num_streams > MAX_NUM_STREAM ||
 		stream_cfg_cmd->num_streams == 0)
 		return -EINVAL;
@@ -2978,8 +3005,15 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	}
 
 	if (src_mask) {
+//HTC_START
+#if 1
+		rc = msm_isp_axi_wait_for_cfg_done(vfe_dev, camif_update,
+			src_mask, 2, reduce_timeout);
+#else
 		rc = msm_isp_axi_wait_for_cfg_done(vfe_dev, camif_update,
 			src_mask, 2);
+#endif
+//HTC_END
 		if (rc < 0) {
 			pr_err("%s: wait for config done failed, retry...\n",
 				__func__);
@@ -2993,8 +3027,15 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 				vfe_dev->hw_info->vfe_ops.core_ops.reg_update(
 					vfe_dev,
 					SRC_TO_INTF(stream_info->stream_src));
+//HTC_START
+#if 1
+				rc = msm_isp_axi_wait_for_cfg_done(vfe_dev,
+					camif_update, src_mask, 1, reduce_timeout);
+#else
 				rc = msm_isp_axi_wait_for_cfg_done(vfe_dev,
 					camif_update, src_mask, 1);
+#endif
+//HTC_END
 				if (rc < 0) {
 					pr_err("%s: vfe%d cfg done failed\n",
 						__func__, vfe_dev->pdev->id);
@@ -3040,7 +3081,7 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	}
 
 	msm_isp_update_camif_output_count(vfe_dev, stream_cfg_cmd);
-	msm_isp_update_stream_bandwidth(vfe_dev, stream_cfg_cmd->hw_state);
+	msm_isp_update_stream_bandwidth(vfe_dev);
 
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info = &axi_data->stream_info[
@@ -3672,9 +3713,17 @@ int msm_isp_update_axi_stream(struct vfe_device *vfe_dev, void *arg)
 				__func__, stream_info->stream_id);
 			if (stream_info->state == ACTIVE) {
 				stream_info->state = UPDATING;
+//HTC_START
+#if 1
+				rc = msm_isp_axi_wait_for_cfg_done(vfe_dev,
+					NO_UPDATE, (1 << SRC_TO_INTF(
+					stream_info->stream_src)), 2, 0);
+#else
 				rc = msm_isp_axi_wait_for_cfg_done(vfe_dev,
 					NO_UPDATE, (1 << SRC_TO_INTF(
 					stream_info->stream_src)), 2);
+#endif
+//HTC_END
 				if (rc < 0)
 					pr_err("%s: wait for update failed\n",
 						__func__);
@@ -3930,8 +3979,7 @@ void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 					if (comp_info->stream_composite_mask &
 						(1 << wm))
 						msm_isp_cfg_wm_scratch(vfe_dev,
-							wm, (pingpong_status >>
-								wm) & 0x1);
+							wm, (pingpong_status >> wm) & 0x1);
 				continue;
 			}
 			stream_idx = HANDLE_TO_IDX(comp_info->stream_handle);

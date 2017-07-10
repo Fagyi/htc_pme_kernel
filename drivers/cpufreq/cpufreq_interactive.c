@@ -539,7 +539,6 @@ static void cpufreq_interactive_timer(unsigned long data)
 		pol_load = max(pol_load, cpu_load);
 		trace_cpufreq_interactive_cpuload(cpu, cpu_load, new_load_pct,
 						  prev_l, pred_l);
-
 		/* save loadadjfreq for notification */
 		pcpu->loadadjfreq = max(t_prevlaf, t_predlaf);
 
@@ -574,7 +573,7 @@ static void cpufreq_interactive_timer(unsigned long data)
 	}
 
 	new_freq = chosen_freq;
-	if (jump_to_max_no_ts || jump_to_max) {
+	if (false && (jump_to_max_no_ts || jump_to_max)) {
 		new_freq = ppol->policy->cpuinfo.max_freq;
 	} else if (!skip_hispeed_logic) {
 		if (pol_load >= tunables->go_hispeed_load ||
@@ -1846,7 +1845,7 @@ static int __init cpufreq_interactive_init(void)
 }
 
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVE
-fs_initcall(cpufreq_interactive_init);
+arch_initcall(cpufreq_interactive_init);
 #else
 module_init(cpufreq_interactive_init);
 #endif
