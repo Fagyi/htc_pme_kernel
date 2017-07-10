@@ -1259,13 +1259,6 @@ static int diagfwd_mux_close(int id, int mode)
 		 * with Memory Device mode.
 		 */
 	} else {
-		for (i = 0; i < NUM_PERIPHERALS; i++) {
-			if (!DM_enable) { /*++ 2015/10/14, USB Team, PCN00092 ++*/
-				diagfwd_close(i, TYPE_DATA);
-				diagfwd_close(i, TYPE_CMD);
-			}
-		}
-		
 		/*
 		* With clearing of masks on ODL exit and
 		* USB disconnection, closing of the channel is
