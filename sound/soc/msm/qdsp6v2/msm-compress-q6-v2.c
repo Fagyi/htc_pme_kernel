@@ -2112,6 +2112,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		prtd->lasttimestamp = 0;
 //HTC_AUD_END
 		if (!prtd->gapless_state.gapless_transition) {
+			q6asm_cmd_nowait(prtd->audio_client, CMD_PAUSE);
 			pr_debug("issue CMD_FLUSH stream_id %d\n", stream_id);
 			spin_unlock_irqrestore(&prtd->lock, flags);
 			q6asm_stream_cmd(
