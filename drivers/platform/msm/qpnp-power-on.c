@@ -1123,12 +1123,12 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 					cfg->key_code, pon_rt_sts);
 	key_status = pon_rt_sts & pon_rt_bit;
 
-#ifdef CONFIG_QPNP_KEY_INPUT
 	if (pon->kpdpwr_dbc_enable && cfg->pon_type == PON_KPDPWR) {
 		if (!key_status)
 			pon->kpdpwr_last_release_time = ktime_get();
 	}
 
+#ifdef CONFIG_QPNP_KEY_INPUT
 	/* simulate press event in case release event occured
 	 * without a press event
 	 */

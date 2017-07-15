@@ -255,7 +255,6 @@ int ocfs2_set_acl(handle_t *handle,
 				if (ret)
 					return ret;
 			}
-
 		}
 		break;
 	case ACL_TYPE_DEFAULT:
