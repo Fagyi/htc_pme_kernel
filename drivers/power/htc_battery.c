@@ -2395,7 +2395,7 @@ void htc_stats_update_charging_statistics(int latest, int prev)
     char time_str[25];
     long dischg_time = 0L;
     long chg_time = 0L;
-    bool debug_flag = false;
+    // bool debug_flag = false;
 
     do_gettimeofday(&rtc_now);
     time_to_tm(rtc_now.tv_sec, 0, &time_info);
