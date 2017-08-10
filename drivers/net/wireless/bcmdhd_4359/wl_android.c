@@ -252,12 +252,10 @@ typedef enum traffic_ind {
 
 static int screen_off = 0;
 int sta_connected = 0;
-#ifdef ENABLE_TRAFFIC_MONITOR
 static int traffic_stats_flag = TRAFFIC_STATS_NORMAL;
 static unsigned long current_traffic_count = 0;
 static unsigned long last_traffic_count = 0;
 static unsigned long last_traffic_count_jiffies = 0;
-#endif
 
 static struct mutex wl_wificall_mutex;
 int multi_core_locked = 0;
@@ -510,7 +508,7 @@ static int wl_android_get_link_speed(struct net_device *net, char *command, int 
 
 static int wl_android_get_rssi(struct net_device *net, char *command, int total_len)
 {
-	wlc_ssid_t ssid = {0};
+	wlc_ssid_t ssid = {0, {0}};
 	int bytes_written = 0;
 	int error = 0;
 	scb_val_t scbval;
@@ -551,11 +549,17 @@ static int wl_android_get_rssi(struct net_device *net, char *command, int total_
 		return -1;
 	if ((ssid.SSID_len == 0) || (ssid.SSID_len > DOT11_MAX_SSID_LEN)) {
 		DHD_ERROR(("%s: wldev_get_ssid failed\n", __FUNCTION__));
+	} else if (total_len <= ssid.SSID_len) {
+		return -ENOMEM;
 	} else {
 		memcpy(command, ssid.SSID, ssid.SSID_len);
 		bytes_written = ssid.SSID_len;
 	}
-	bytes_written += snprintf(&command[bytes_written], total_len, " rssi %d", scbval.val);
+	if ((total_len - bytes_written) < (strlen(" rssi -XXX") + 1))
+		return -ENOMEM;
+	bytes_written += scnprintf(&command[bytes_written], total_len - bytes_written,
+		" rssi %d", scbval.val);
+	command[bytes_written] = '\0';
 	DHD_TRACE(("%s: command result is %s (%d)\n", __FUNCTION__, command, bytes_written));
 #ifdef CUSTOMER_HW_ONE
 	wl_android_traffic_monitor(net);
@@ -1942,8 +1946,8 @@ wl_android_set_roampref(struct net_device *dev, char *command, int total_len)
 	uint8 buf[MAX_BUF_SIZE];
 	uint8 *pref = buf;
 	char *pcmd;
-	int num_ucipher_suites = 0;
-	int num_akm_suites = 0;
+	uint num_ucipher_suites = 0;
+	uint num_akm_suites = 0;
 	wpa_suite_t ucipher_suites[MAX_NUM_SUITES];
 	wpa_suite_t akm_suites[MAX_NUM_SUITES];
 	int num_tuples = 0;
@@ -1956,7 +1960,11 @@ wl_android_set_roampref(struct net_device *dev, char *command, int total_len)
 	total_len_left = total_len - strlen(CMD_SET_ROAMPREF) + 1;
 
 	num_akm_suites = simple_strtoul(pcmd, NULL, 16);
-	/* Increment for number of AKM suites field + space */
+	if (num_akm_suites > MAX_NUM_SUITES) {
+		WL_ERR(("wrong num_akm_suites:%d.\n", num_akm_suites));
+		return BCME_ERROR;
+	}
+	
 	pcmd += 3;
 	total_len_left -= 3;
 
@@ -1981,7 +1989,11 @@ wl_android_set_roampref(struct net_device *dev, char *command, int total_len)
 
 	total_len_left -= (num_akm_suites * WIDTH_AKM_SUITE);
 	num_ucipher_suites = simple_strtoul(pcmd, NULL, 16);
-	/* Increment for number of cipher suites field + space */
+	if (num_ucipher_suites > MAX_NUM_SUITES) {
+		WL_ERR(("wrong num_ucipher_suites:%d.\n", num_ucipher_suites));
+		return BCME_ERROR;
+	}
+	
 	pcmd += 3;
 	total_len_left -= 3;
 
@@ -2851,10 +2863,12 @@ wl_android_set_rps_cpus(struct net_device *dev, char *command, int total_len)
 int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 {
 #define PRIVATE_COMMAND_MAX_LEN	8192
+#define PRIVATE_COMMAND_DEF_LEN	4096
 	int ret = 0;
 	char *command = NULL;
 	int bytes_written = 0;
 	android_wifi_priv_cmd priv_cmd;
+	int buf_size = 0;
 
 	net_os_wake_lock(net);
 
@@ -2889,11 +2903,15 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 	}
 	if ((priv_cmd.total_len > PRIVATE_COMMAND_MAX_LEN) || (priv_cmd.total_len < 0)) {
-		DHD_ERROR(("%s: too long priavte command\n", __FUNCTION__));
+		DHD_ERROR(("%s: buf length invalid:%d\n", __FUNCTION__,
+			priv_cmd.total_len));
 		ret = -EINVAL;
 		goto exit;
 	}
-	command = kmalloc((priv_cmd.total_len + 1), GFP_KERNEL);
+
+	buf_size = max(priv_cmd.total_len, PRIVATE_COMMAND_DEF_LEN);
+	command = kmalloc((buf_size + 1), GFP_KERNEL);
+
 	if (!command)
 	{
 		DHD_ERROR(("%s: failed to allocate memory\n", __FUNCTION__));
@@ -2908,6 +2926,43 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 
 	DHD_INFO(("%s: Android private cmd \"%s\" on %s\n", __FUNCTION__, command, ifr->ifr_name));
 
+	bytes_written = wl_handle_private_cmd(net, command, priv_cmd.total_len);
+	if (bytes_written >= 0) {
+		if ((bytes_written == 0) && (priv_cmd.total_len > 0))
+			command[0] = '\0';
+		if (bytes_written >= priv_cmd.total_len) {
+			DHD_ERROR(("%s: err. b_w:%d >= tot:%d\n", __FUNCTION__,
+					bytes_written, priv_cmd.total_len));
+			ret = BCME_BUFTOOSHORT;
+			goto exit;
+		}
+		bytes_written++;
+		priv_cmd.used_len = bytes_written;
+		if (copy_to_user(priv_cmd.buf, command, bytes_written)) {
+			DHD_ERROR(("%s: failed copy to user\n", __FUNCTION__));
+			ret = -EFAULT;
+		}
+	}
+	else {
+		
+		ret = bytes_written;
+	}
+
+exit:
+	net_os_wake_unlock(net);
+	kfree(command);
+	return ret;
+}
+
+int
+wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len)
+{
+	int bytes_written = 0;
+	android_wifi_priv_cmd priv_cmd;
+
+	bzero(&priv_cmd, sizeof(android_wifi_priv_cmd));
+	priv_cmd.total_len = cmd_len;
+
 	if (strnicmp(command, CMD_START, strlen(CMD_START)) == 0) {
 		DHD_INFO(("%s, Received regular START command\n", __FUNCTION__));
 		bytes_written = wl_android_wifi_on(net);
@@ -2917,10 +2972,9 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	}
 
 	if (!g_wifi_on) {
-		DHD_ERROR(("%s: Ignore private cmd \"%s\" - iface %s is down\n",
-			__FUNCTION__, command, ifr->ifr_name));
-		ret = 0;
-		goto exit;
+		DHD_ERROR(("%s: Ignore private cmd \"%s\" - iface is down\n",
+			__FUNCTION__, command));
+		return 0;
 	}
 
 	if (strnicmp(command, CMD_STOP, strlen(CMD_STOP)) == 0) {
@@ -3016,7 +3070,6 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 					"but roam_band iovar unsupported in the firmware\n"));
 			} else {
 				bytes_written = -1;
-				goto exit;
 			}
 		}
 		if ((band == WLC_BAND_AUTO) || (ret == BCME_UNSUPPORTED))
@@ -3358,43 +3411,9 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 #endif /* CUSTOMER_HW_ONE */
 	else {
 		DHD_ERROR(("Unknown PRIVATE command %s - ignored\n", command));
-		snprintf(command, 3, "OK");
-		bytes_written = strlen("OK");
+		bytes_written = scnprintf(command, sizeof("FAIL"), "FAIL");
 	}
-
-	if (bytes_written >= 0) {
-		if ((bytes_written == 0) && (priv_cmd.total_len > 0))
-			command[0] = '\0';
-		if (bytes_written >= priv_cmd.total_len) {
-			DHD_ERROR(("%s: bytes_written = %d\n", __FUNCTION__, bytes_written));
-			bytes_written = priv_cmd.total_len;
-		} else {
-			bytes_written++;
-		}
-		priv_cmd.used_len = bytes_written;
-		if (copy_to_user(priv_cmd.buf, command, bytes_written)) {
-			DHD_ERROR(("%s: failed to copy data to user buffer\n", __FUNCTION__));
-			ret = -EFAULT;
-		}
-	}
-#ifdef CONNECTION_STATISTICS
-	else if (strnicmp(command, CMD_GET_CONNECTION_STATS,
-		strlen(CMD_GET_CONNECTION_STATS)) == 0) {
-		bytes_written = wl_android_get_connection_stats(net, command,
-			priv_cmd.total_len);
-	}
-#endif
-	else {
-		ret = bytes_written;
-	}
-
-exit:
-	net_os_wake_unlock(net);
-	if (command) {
-		kfree(command);
-	}
-
-	return ret;
+	return bytes_written;
 }
 
 int wl_android_init(void)
@@ -3864,7 +3883,6 @@ fail :
 
 void wl_android_traffic_monitor(struct net_device *dev)
 {
-#ifdef ENABLE_TRAFFIC_MONITOR
 	unsigned long rx_packets_count = 0;
 	unsigned long tx_packets_count = 0;
 	unsigned long traffic_diff = 0;
@@ -3987,7 +4005,6 @@ void wl_android_traffic_monitor(struct net_device *dev)
 	/* End of Traffic High/Low indication */
 #ifdef DHD_TRACE_PERF_STATE
 	dhd_set_perf_state(dev, traffic_stats_flag, FALSE);
-#endif
 #endif
 }
 
@@ -4370,6 +4387,7 @@ wl_android_get_assoc_sta_list(struct net_device *dev, char *buf, int len)
 	int ret, i;
 	char mac_lst[256];
 	char *p_mac_str;
+	int bytes_written = 0;
 
 	bcm_mdelay(500);
 	maclist->count = MAX_ASSOC_NUMBER;
@@ -4381,13 +4399,13 @@ wl_android_get_assoc_sta_list(struct net_device *dev, char *buf, int len)
 	/* format: "count|sta 1, sta2, ..."
 	*/
 
-	p_mac_str += snprintf(p_mac_str, 80, "%d|", maclist->count);
+	bytes_written += snprintf(&p_mac_str[bytes_written], 80, "%d|", maclist->count);
 
 	for (i = 0; i < maclist->count; i++) {
 		struct ether_addr *id = &maclist->ea[i];
 
 
-		p_mac_str += snprintf(p_mac_str, 80, "%02X:%02X:%02X:%02X:%02X:%02X,",
+		bytes_written += snprintf(&p_mac_str[bytes_written], 80, "%02X:%02X:%02X:%02X:%02X:%02X,",
 			id->octet[0], id->octet[1], id->octet[2],
 			id->octet[3], id->octet[4], id->octet[5]);
 	}
@@ -4396,7 +4414,7 @@ wl_android_get_assoc_sta_list(struct net_device *dev, char *buf, int len)
 		DHD_ERROR(("get assoc count fail\n"));
 		maclist->count = 0;
 	} else
-		DHD_ERROR(("get assoc count %d, len %d\n", maclist->count, len));
+		DHD_ERROR(("get assoc count %d, bytes_written %d\n", maclist->count, bytes_written));
 
 	if (!sta_event_sent && assoc_count_buff && (assoc_count_buff != maclist->count)) {
 		wl_cfg80211_send_priv_event(dev, "STA_LEAVE");
@@ -4404,9 +4422,9 @@ wl_android_get_assoc_sta_list(struct net_device *dev, char *buf, int len)
 
 	assoc_count_buff = maclist->count;
 	sta_event_sent = 0;
-	memset(buf, 0x0, len);
-	memcpy(buf, mac_lst, len);
-	return len;
+	memset(buf, 0x0, bytes_written);
+	memcpy(buf, mac_lst, bytes_written);
+	return bytes_written;
 }
 
 static int wl_android_set_ap_mac_list(struct net_device *dev, void *buf)

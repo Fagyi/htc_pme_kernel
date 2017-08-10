@@ -297,10 +297,6 @@ print_tainted()
 #endif	/* LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 15) */
 
 /* Linux wireless extension support */
-#if defined(WL_WIRELESS_EXT)
-#include <wl_iw.h>
-extern wl_iw_extra_params_t  g_wl_iw_params;
-#endif /* defined(WL_WIRELESS_EXT) */
 
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(DHD_USE_EARLYSUSPEND)
 #include <linux/earlysuspend.h>
@@ -393,6 +389,7 @@ static struct mutex enable_pktfilter_mutex;
 #endif /* PKT_FILTER_SUPPORT */
 
 void wl_android_set_screen_off(int off);
+int dhd_set_keepalive(int value);
 /* HTC_WIFI_START */
 // ** [HPKB#7947] Tx stuck detection
 #ifdef TX_STUCK_DETECTION
@@ -475,9 +472,7 @@ typedef struct dhd_dump {
 
 /* Local private structure (extension of pub) */
 typedef struct dhd_info {
-#if defined(WL_WIRELESS_EXT)
-	wl_iw_t		iw;		/* wireless extensions state (must be first) */
-#endif /* defined(WL_WIRELESS_EXT) */
+
 	dhd_pub_t pub;
 	dhd_if_t *iflist[DHD_MAX_IFS]; /* for supporting multiple interfaces */
 
@@ -1385,9 +1380,6 @@ int dhd_monitor_init(void *dhd_pub);
 int dhd_monitor_uninit(void);
 
 
-#if defined(WL_WIRELESS_EXT)
-struct iw_statistics *dhd_get_wireless_stats(struct net_device *dev);
-#endif /* defined(WL_WIRELESS_EXT) */
 
 static void dhd_dpc(ulong data);
 /* forward decl */
@@ -2504,32 +2496,6 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 #endif /* PKT_FILTER_SUPPORT */
 }
 
-static void lineage_update_screen_state(dhd_pub_t *dhd, bool is_screen_off)
-{
-	char iovbuf[32];
-	int ret;
-	int pm2_sleep_ret = is_screen_off ? 50 : 200;
-	int mpc = is_screen_off;
-
-	/* Set the maximum time to wait before going back to sleep */
-	bcm_mkiovar("pm2_sleep_ret", (char *)&pm2_sleep_ret,
-		4, iovbuf, sizeof(iovbuf));
-
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
-	if (ret < 0) {
-		DHD_ERROR(("%s set pm2_sleep_ret ret[%d] \n", __FUNCTION__, ret));
-	}
-
-	/* Set minimum power consumption mode */
-	bcm_mkiovar("mpc", (char *)&mpc,
-		4, iovbuf, sizeof(iovbuf));
-
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
-	if (ret < 0) {
-		DHD_ERROR(("%s set mpc ret[%d] \n", __FUNCTION__, ret));
-	}
-}
-
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
 #ifndef SUPPORT_PM2_ONLY
@@ -2574,7 +2540,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	is_screen_off = value;
 	wl_android_set_screen_off(is_screen_off);
 
-	lineage_update_screen_state(dhd, is_screen_off);
 
 	/* clear p2p indicate event when screen off */
 	if (is_screen_off && !dhd->allow_p2p_event) {
@@ -2680,6 +2645,9 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					DHD_ERROR(("failed to set intr_width (%d)\n", ret));
 				}
 #endif /* DYNAMIC_SWOOB_DURATION */
+#ifdef CUSTOMER_HW_ONE
+				dhd_set_keepalive(1);
+#endif 
 			} else {
 #ifdef PKT_FILTER_SUPPORT
 				dhd->early_suspended = 0;
@@ -2726,6 +2694,9 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 						DHD_ERROR(("failed to set nd_ra_filter (%d)\n",
 							ret));
 				}
+#ifdef CUSTOMER_HW_ONE
+				dhd_set_keepalive(0);
+#endif 
 			}
 	}
 	dhd_suspend_unlock(dhd);
@@ -4093,27 +4064,13 @@ done:
 			dhd->pub.xmit_record_time = ((uint32)jiffies_to_msecs(jiffies));
 		}
 		dhd->pub.xmit_count++;
-#ifdef TX_STUCK_DETECTION
-		if (dhd->pub.xmit_count > 10 && ((((uint32)jiffies_to_msecs(jiffies)) - dhd->pub.xmit_record_time) > 3000)) {
-			schedule_delayed_work(&dhd->dhd_wl_counter_dump_work, 50);
-			DHD_ERROR(("%s new_tx_completed_count %d, old_tx_completed_count %d, xmit_count %d\n", __FUNCTION__,
-						dhd->pub.new_tx_completed_count, dhd->pub.old_tx_completed_count, dhd->pub.xmit_count));
-		}
-#endif /* TX_STUCK_DETECTION */
 		if (dhd->pub.xmit_count > 10 && ((((uint32)jiffies_to_msecs(jiffies)) - dhd->pub.xmit_record_time) > 10000)) {
-			if (!dhd->pub.xmit_hang_possible) {
-				DHD_ERROR(("%s tx stuck time > 10s, flagging for possible recovery\n", __FUNCTION__));
-				dhd->pub.xmit_hang_possible = true;
-				dhd->pub.xmit_record_time = ((uint32)jiffies_to_msecs(jiffies));
-			} else {
 				DHD_ERROR(("%s tx stuck time > 10s, do recover\n", __FUNCTION__));
 				net_os_send_hang_message(net);
-			}
 		}
 	} else {
 		dhd->pub.xmit_count = 0;
 		dhd->pub.xmit_record_time = 0;
-		dhd->pub.xmit_hang_possible = false;
 	}
 	dhd->pub.old_tx_completed_count = dhd->pub.new_tx_completed_count;
 #endif /* CUSTOMER_HW_ONE */
@@ -5645,14 +5602,7 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		goto exit;
 	}
 
-#if defined(WL_WIRELESS_EXT)
-	/* linux wireless extensions */
-	if ((cmd >= SIOCIWFIRST) && (cmd <= SIOCIWLAST)) {
-		/* may recurse, do NOT lock */
-		ret = wl_iw_ioctl(net, ifr, cmd);
-		goto exit;
-	}
-#endif /* defined(WL_WIRELESS_EXT) */
+
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 4, 2)
 	if (cmd == SIOCETHTOOL) {
@@ -5802,7 +5752,7 @@ dhd_stop(struct net_device *net)
 	dhd->pub.new_tx_completed_count = 0;
 	dhd->pub.xmit_count = 0;
 	dhd->pub.xmit_record_time = 0;
-	dhd->pub.xmit_hang_possible = false;
+	
 	/* HTC_WIFI_END */
 	smp_mb();
 #endif /* CUSTOMER_HW_ONE */
@@ -6001,7 +5951,7 @@ dhd_open_retry:
 	dhd->pub.new_tx_completed_count = 0;
 	dhd->pub.xmit_count = 0;
 	dhd->pub.xmit_record_time = 0;
-	dhd->pub.xmit_hang_possible = false;
+	
 	/* HTC_WIFI_END */
 #endif /* CUSTOMER_HW_ONE */
 	dhd->pub.dongle_trap_occured = 0;
@@ -7041,16 +6991,7 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	dhd_monitor_init(&dhd->pub);
 	dhd_state |= DHD_ATTACH_STATE_CFG80211;
 #endif
-#if defined(WL_WIRELESS_EXT)
-	/* Attach and link in the iw */
-	if (!(dhd_state &  DHD_ATTACH_STATE_CFG80211)) {
-		if (wl_iw_attach(net, (void *)&dhd->pub) != 0) {
-		DHD_ERROR(("wl_iw_attach failed\n"));
-		goto fail;
-	}
-	dhd_state |= DHD_ATTACH_STATE_WL_ATTACH;
-	}
-#endif /* defined(WL_WIRELESS_EXT) */
+
 
 #ifdef SHOW_LOGTRACE
 	dhd_init_logstrs_array(&dhd->event_data);
@@ -8211,7 +8152,11 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* DISABLE_11N */
 
 #if defined(DISABLE_11AC) || defined(CUSTOMER_HW_ONE)
+#if defined(SUPPORT_5G_HT80)
+	uint32 vhtmode = 1;
+#else
 	uint32 vhtmode = 0;
+#endif 
 #endif /* DISABLE_11AC || CUSTOMER_HW_ONE */
 #ifdef USE_WL_TXBF
 	uint32 txbf = 1;
@@ -9570,14 +9515,6 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 	net->ethtool_ops = &dhd_ethtool_ops;
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24) */
 
-#if defined(WL_WIRELESS_EXT)
-#if WIRELESS_EXT < 19
-	net->get_wireless_stats = dhd_get_wireless_stats;
-#endif /* WIRELESS_EXT < 19 */
-#if WIRELESS_EXT > 12
-	net->wireless_handlers = (struct iw_handler_def *)&wl_iw_handler_def;
-#endif /* WIRELESS_EXT > 12 */
-#endif /* defined(WL_WIRELESS_EXT) */
 
 	dhd->pub.rxsz = DBUS_RX_BUFFER_SIZE_DHD(net);
 
@@ -9610,9 +9547,6 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 		~net->dev_addr[3]&0xff, ~net->dev_addr[4]&0xff, ~net->dev_addr[5]&0xff));
 /* HTC_WIFI_END */
 
-#if defined(SOFTAP) && defined(WL_WIRELESS_EXT) && !defined(WL_CFG80211)
-		wl_iw_iscan_set_scan_broadcast_prep(net, 1);
-#endif
 
 #if 1 && (defined(BCMPCIE) || (defined(BCMLXSDMMC) && (LINUX_VERSION_CODE >= \
 	KERNEL_VERSION(2, 6, 27))))
@@ -9758,12 +9692,8 @@ void dhd_detach(dhd_pub_t *dhdp)
 	dhd->dhd_force_exit = TRUE;
 #endif
 
-#if defined(WL_WIRELESS_EXT)
-	if (dhd->dhd_state & DHD_ATTACH_STATE_WL_ATTACH) {
-		/* Detatch and unlink in the iw */
-		wl_iw_detach();
-	}
-#endif /* defined(WL_WIRELESS_EXT) */
+
+	
 
 	/* delete all interfaces, start with virtual  */
 	if (dhd->dhd_state & DHD_ATTACH_STATE_ADD_IF) {
@@ -10626,25 +10556,6 @@ void dhd_os_prefree(dhd_pub_t *dhdpub, void *addr, uint size)
 {
 }
 
-#if defined(WL_WIRELESS_EXT)
-struct iw_statistics *
-dhd_get_wireless_stats(struct net_device *dev)
-{
-	int res = 0;
-	dhd_info_t *dhd = DHD_DEV_INFO(dev);
-
-	if (!dhd->pub.up) {
-		return NULL;
-	}
-
-	res = wl_iw_get_wireless_stats(dev, &dhd->iw.wstats);
-
-	if (res == 0)
-		return &dhd->iw.wstats;
-	else
-		return NULL;
-}
-#endif /* defined(WL_WIRELESS_EXT) */
 
 static int
 dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata, size_t pktlen,
@@ -10662,20 +10573,6 @@ dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata, size_t pktlen,
 	if (bcmerror != BCME_OK)
 		return (bcmerror);
 
-#if defined(WL_WIRELESS_EXT)
-	if (event->bsscfgidx == 0) {
-		/*
-		 * Wireless ext is on primary interface only
-		 */
-
-	ASSERT(dhd->iflist[*ifidx] != NULL);
-	ASSERT(dhd->iflist[*ifidx]->net != NULL);
-
-		if (dhd->iflist[*ifidx]->net) {
-		wl_iw_event(dhd->iflist[*ifidx]->net, event, *data);
-		}
-	}
-#endif /* defined(WL_WIRELESS_EXT)  */
 
 #ifdef WL_CFG80211
 	ASSERT(dhd->iflist[*ifidx] != NULL);
@@ -11899,6 +11796,8 @@ static void dhd_hang_process(void *dhd_info, void *event_info, u8 event)
 			if (!dhdp->dongle_trap_occured) {
 				dhd_net_if_lock(dev);
 				dhdp->dongle_reset = TRUE;
+				smp_mb();
+				dhd_wakeup_ioctl_event(dhdp, IOCTL_RETURN_ON_TRAP);
 				if (g_wifi_on) {
 					DHD_ERROR(("%s: stop clock\n", __FUNCTION__));
 					dhd_bus_stop_clock(dhdp);
@@ -11929,9 +11828,7 @@ static void dhd_hang_process(void *dhd_info, void *event_info, u8 event)
 #if defined(WL_VENDOR_EXT_SUPPORT) && defined(CUSTOMER_HW_ONE)
 		wl_cfg80211_send_priv_event(dev, "HANG");
 #else
-#if defined(WL_WIRELESS_EXT)
-		wl_iw_send_priv_event(dev, "HANG");
-#endif /* WL_WIRELESS_EXT */
+
 #if defined(WL_CFG80211)
 		wl_cfg80211_hang(dev, WLAN_REASON_UNSPECIFIED);
 #endif /* WL_CFG80211 */
@@ -14768,6 +14665,39 @@ void wl_android_enable_pktfilter(struct net_device *dev, int multicastlock)
 	multicast_lock = multicastlock;
 	/* we don't need to care first parameter in dhd_enable_packet_filter */
 	dhd_enable_packet_filter(0, &dhd->pub);
+}
+
+int dhd_set_keepalive(int value)
+{
+	char *str;
+	int str_len;
+	int buf_len;
+	char buf[256];
+	wl_keep_alive_pkt_t keep_alive_pkt;
+	wl_keep_alive_pkt_t *keep_alive_pktp;
+	int ret = 0;
+
+	dhd_pub_t *dhd = priv_dhdp;
+	memset(&keep_alive_pkt, 0, sizeof(keep_alive_pkt));
+
+	
+	str = "keep_alive";
+	str_len = strlen(str);
+	strncpy(buf, str, str_len);
+	buf[str_len] = '\0';
+	buf_len = str_len + 1;
+	keep_alive_pktp = (wl_keep_alive_pkt_t *) (buf + str_len + 1);
+
+	keep_alive_pkt.period_msec = htod32(55000); 
+	keep_alive_pkt.len_bytes = 0;
+	buf_len += WL_KEEP_ALIVE_FIXED_LEN;
+	bzero(keep_alive_pkt.data, sizeof(keep_alive_pkt.data));
+	memcpy((char*)keep_alive_pktp, &keep_alive_pkt, WL_KEEP_ALIVE_FIXED_LEN);
+
+	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, buf_len, TRUE, 0);
+	DHD_ERROR(("%s set result ret[%d]\n", __FUNCTION__, ret));
+
+	return ret;
 }
 
 /* HTC_WIFI_START */

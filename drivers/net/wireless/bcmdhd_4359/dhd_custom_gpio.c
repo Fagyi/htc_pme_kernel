@@ -36,9 +36,6 @@
 #include <dhd_linux.h>
 
 #include <wlioctl.h>
-#if defined(WL_WIRELESS_EXT)
-#include <wl_iw.h>
-#endif
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
@@ -138,13 +135,11 @@ dhd_custom_get_mac_address(void *adapter, unsigned char *buf)
 }
 #endif /* GET_CUSTOM_MAC_ENABLE */
 
-#if !defined(WL_WIRELESS_EXT)
 struct cntry_locales_custom {
 	char iso_abbrev[WLC_CNTRY_BUF_SZ];	/* ISO 3166-1 country abbreviation */
 	char custom_locale[WLC_CNTRY_BUF_SZ];	/* Custom firmware locale */
 	int32 custom_locale_rev;		/* Custom local revisin default -1 */
 };
-#endif /* WL_WIRELESS_EXT */
 
 /* Customized Locale table : OPTIONAL feature */
 const struct cntry_locales_custom translate_custom_table[] = {
@@ -259,19 +254,23 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"AM", "AM", 1},
 	{"AR", "AR", 21},
 	{"AU", "AU", 6},
-	{"BG", "BG", 4},
+	{"BG", "BG", 7},
 	{"BH", "BH", 4},
 	{"BR", "BR", 17},
+	{"BZ", "BZ", 0},
 	{"CA", "CA", 31},
 	{"CL", "CL", 0},
 	{"CN", "CN", 38},
 	{"CO", "CO", 17},
-	{"DE", "DE", 7},
+	{"CR", "CR", 17},
+	{"DE", "DE", 13},
 	{"DZ", "XZ", 11},
 	{"EG", "EG", 13},
-	{"ES", "ES", 4},
-	{"FR", "FR", 5},
+	{"ES", "ES", 7},
+	{"FR", "FR", 8},
+	{"GT", "SV", 17},
 	{"HK", "HK", 2},
+	{"HN", "SV", 17},
 	{"ID", "ID", 5},
 	{"IL", "IL", 7},
 	{"IN", "IN", 3},
@@ -280,7 +279,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"JP", "JP", 45},
 	{"KR", "KR", 4},
 	{"KW", "KW", 5},
-	{"KZ", "KZ", 0},
+	{"KZ", "RU", 62},
 	{"LB", "LB", 3},
 	{"LY", "XZ", 11},
 	{"MA", "IL", 7},
@@ -288,25 +287,28 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"MY", "MY", 19},
 	{"MX", "MX", 20},
 	{"NZ", "NZ", 4},
+	{"NI", "NI", 2},
 	{"OM", "OM", 4},
+	{"PA", "PA", 17},
 	{"PE", "PE", 20},
 	{"PH", "PH", 5},
 	{"PR", "PR", 20},
 	{"QA", "QA", 0},
-	{"RS", "RS", 2},
-	{"RU", "KZ", 0},
+	{"RS", "FR", 8},
+	{"RU", "RU", 62},
 	{"SA", "SA", 0},
 	{"SG", "SG", 12},
+	{"SV", "SV", 17},
 	{"TH", "TH", 5},
-	{"TN", "TN", 0},
-	{"TR", "TR", 7},
+	{"TN", "TN", 1},
+	{"TR", "TR", 10},
 	{"TW", "TW", 65},
 	{"UA", "UA", 6},
 	{"US", "US", 0},
 	{"VE", "VE", 3},
 	{"VN", "VN", 4},
 	{"YE", "YE", 0},
-	{"ZA", "ZA", 6},
+	{"ZA", "HK", 2},
 #endif
 };
 
@@ -321,17 +323,21 @@ const struct cntry_locales_custom translate_custom_hotspot_table[] = {
 	{"BH", "BH", 4},
 	{"BO", "BO", 5},
 	{"BR", "BR", 2},
+	{"BZ", "BZ", 0},
 	{"CA", "CA", 31},
 	{"CL", "CL", 0},
 	{"CN", "CN", 38},
 	{"CO", "CO", 17},
+	{"CR", "CR", 17},
 	{"DE", "DE", 6},
 	{"DZ", "IL", 7},
 	{"EG", "EG", 2},
 	{"ES", "ES", 3},
 	{"FR", "FR", 3},
 	{"GY", "GY", 205},
+	{"GT", "SV", 17},
 	{"HK", "HK", 1},
+	{"HN", "SV", 17},
 	{"ID", "ID", 11},
 	{"IL", "IL", 5},
 	{"IN", "IN", 2},
@@ -350,14 +356,17 @@ const struct cntry_locales_custom translate_custom_hotspot_table[] = {
 	{"MX", "MX", 24},
 	{"NG", "NG", 205},
 	{"NZ", "NZ", 2},
+	{"NI", "NI", 2},
 	{"OM", "OM", 4},
 	{"PE", "PE", 20},
 	{"PH", "PH", 3},
 	{"PK", "PK", 2},
 	{"PR", "PR", 20},
+	{"PA", "PA", 17},
 	{"QA", "QA", 0},
 	{"RS", "RS", 2},
 	{"RU", "IL", 7},
+	{"SV", "SV", 17},
 	{"SA", "SA", 0},
 	{"SG", "SG", 11},
 	{"TH", "TH", 3},
