@@ -3776,7 +3776,7 @@ static void binder_deferred_func(struct work_struct *work)
 
 	do {
 		trace_binder_lock(__func__);
-		mutex_lock(&binder_main_lock);
+		rt_mutex_lock(&binder_main_lock);
 		trace_binder_locked(__func__);
 
 		mutex_lock(&binder_deferred_lock);
@@ -3807,7 +3807,7 @@ static void binder_deferred_func(struct work_struct *work)
 			binder_deferred_release(proc); /* frees proc */
 
 		trace_binder_unlock(__func__);
-		mutex_unlock(&binder_main_lock);
+		rt_mutex_unlock(&binder_main_lock);
 		preempt_enable_no_resched();
 		if (files)
 			put_files_struct(files);
