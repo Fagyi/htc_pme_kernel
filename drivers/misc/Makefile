@@ -74,9 +74,7 @@ obj-$(CONFIG_FPR_FPC)		+= fpr_FingerprintCard/
 obj-$(CONFIG_HTC_FLASHLIGHT)	+= htc_flashlight.o
 obj-$(CONFIG_RT_REGMAP)		+= rt-regmap.o
 obj-$(CONFIG_VIB_TRIGGERS)	+= vib-triggers.o
-<<<<<<< HEAD
 
 # Fast Charge
 obj-$(CONFIG_FORCE_FAST_CHARGE)		+= fastcharge/
 
-obj-y				+= sound_control.o
