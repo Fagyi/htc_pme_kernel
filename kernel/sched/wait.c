@@ -9,6 +9,7 @@
 #include <linux/mm.h>
 #include <linux/wait.h>
 #include <linux/hash.h>
+#include <linux/kthread.h>
 
 void __init_waitqueue_head(wait_queue_head_t *q, const char *name, struct lock_class_key *key)
 {
@@ -297,6 +298,10 @@ int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *
 }
 EXPORT_SYMBOL(autoremove_wake_function);
 
+static inline bool is_kthread_should_stop(void)
+{
+	return (current->flags & PF_KTHREAD) && kthread_should_stop();
+}
 
 /*
  * DEFINE_WAIT_FUNC(wait, woken_wake_func);
@@ -326,7 +331,7 @@ long wait_woken(wait_queue_t *wait, unsigned mode, long timeout)
 	 * woken_wake_function() such that if we observe WQ_FLAG_WOKEN we must
 	 * also observe all state before the wakeup.
 	 */
-	if (!(wait->flags & WQ_FLAG_WOKEN))
+	if (!(wait->flags & WQ_FLAG_WOKEN) && !is_kthread_should_stop())
 		timeout = schedule_timeout(timeout);
 	__set_current_state(TASK_RUNNING);
 
@@ -596,7 +601,7 @@ EXPORT_SYMBOL(bit_wait_io);
 
 __sched int bit_wait_timeout(struct wait_bit_key *word)
 {
-	unsigned long now = ACCESS_ONCE(jiffies);
+	unsigned long now = READ_ONCE(jiffies);
 	if (signal_pending_state(current->state, current))
 		return 1;
 	if (time_after_eq(now, word->timeout))
@@ -608,7 +613,7 @@ EXPORT_SYMBOL_GPL(bit_wait_timeout);
 
 __sched int bit_wait_io_timeout(struct wait_bit_key *word)
 {
-	unsigned long now = ACCESS_ONCE(jiffies);
+	unsigned long now = READ_ONCE(jiffies);
 	if (signal_pending_state(current->state, current))
 		return 1;
 	if (time_after_eq(now, word->timeout))

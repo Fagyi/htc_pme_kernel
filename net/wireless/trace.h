@@ -704,10 +704,9 @@ DECLARE_EVENT_CLASS(station_del,
 		  __entry->subtype, __entry->reason_code)
 );
 
-DEFINE_EVENT(station_del, rdev_del_station,
-	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
-		 struct station_del_parameters *params),
-	TP_ARGS(wiphy, netdev, params)
+DEFINE_EVENT(wiphy_netdev_mac_evt, rdev_del_station,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev, const u8 *mac),
+	TP_ARGS(wiphy, netdev, mac)
 );
 
 DEFINE_EVENT(wiphy_netdev_mac_evt, rdev_get_station,

@@ -4659,30 +4659,48 @@ static int
 dhd_msgbuf_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uint8 action)
 {
 	int ret = 0;
+	uint copylen = 0;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
 	/* Respond "bcmerror" and "bcmerrorstr" with local cache */
 	if (cmd == WLC_GET_VAR && buf)
 	{
-		if (!strcmp((char *)buf, "bcmerrorstr"))
-		{
-			strncpy((char *)buf, bcmerrorstr(dhd->dongle_error), BCME_STRLEN);
+		if (!len || !*(uint8 *)buf) {
+			DHD_ERROR(("%s(): Zero length bailing\n", __FUNCTION__));
+			ret = BCME_BADARG;
 			goto done;
 		}
-		else if (!strcmp((char *)buf, "bcmerror"))
-		{
-			*(int *)buf = dhd->dongle_error;
+
+		
+		copylen = MIN(len, BCME_STRLEN);
+		if ((len >= strlen("bcmerrorstr")) &&
+			(!strcmp((char *)buf, "bcmerrorstr"))) {
+
+			strncpy((char *)buf, bcmerrorstr(dhd->dongle_error), copylen);
+			*(uint8 *)((uint8 *)buf + (copylen - 1)) = '\0';
+
+			goto done;
+		} else if ((len >= strlen("bcmerror")) &&
+			!strcmp((char *)buf, "bcmerror")) {
+
+			*(uint32 *)(uint32 *)buf = dhd->dongle_error;
+
 			goto done;
 		}
 	}
 
-	ret = dhd_fillup_ioct_reqst(dhd, (uint16)len, cmd, buf, ifidx);
-
 	DHD_CTL(("query_ioctl: ACTION %d ifdix %d cmd %d len %d \n",
 		action, ifidx, cmd, len));
 
-	/* wait for IOCTL completion message from dongle and get first fragment */
+	ret = dhd_fillup_ioct_reqst(dhd, (uint16)len, cmd, buf, ifidx);
+
+	if (ret < 0) {
+		DHD_ERROR(("%s(): dhd_fillup_ioct_reqst failed \r\n", __FUNCTION__));
+		goto done;
+	}
+
+	
 	ret = dhd_msgbuf_wait_ioctl_cmplt(dhd, len, buf);
 
 done:
@@ -4716,6 +4734,17 @@ dhd_msgbuf_wait_ioctl_cmplt(dhd_pub_t *dhd, uint32 len, void *buf)
 
 	timeleft = dhd_os_ioctl_resp_wait(dhd, &prot->ioctl_received);
 
+	if (dhd_query_bus_erros(dhd)) {
+		ret = -EIO;
+		goto out;
+	}
+
+	if(dhd->bus->islinkdown) {
+		DHD_ERROR(("%s: PCIe link was down\n", __FUNCTION__));
+		ret = -EIO;
+		goto out;
+	}
+
 	if (prot->ioctl_received == 0) {
 		uint32 intstatus = 0;
 		uint32 intmask = 0;
@@ -4735,6 +4764,18 @@ dhd_msgbuf_wait_ioctl_cmplt(dhd_pub_t *dhd, uint32 len, void *buf)
 
 			timeleft = dhd_os_ioctl_resp_wait(dhd, (uint *)&prot->ioctl_received);
 			/* Enable Back Interrupts using IntMask */
+			if (dhd_query_bus_erros(dhd)) {
+				ret = -EIO;
+				goto out;
+			}
+
+			if(dhd->bus->islinkdown) {
+				DHD_ERROR(("%s: PCIe link was down\n", __FUNCTION__));
+				ret = -EIO;
+				goto out;
+			}
+
+			
 			dhdpcie_bus_intr_enable(dhd->bus);
 		}
 	}

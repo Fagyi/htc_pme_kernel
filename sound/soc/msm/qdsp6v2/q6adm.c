@@ -326,7 +326,6 @@ fail_cmd:
 	return rc;
 }
 //HTC_AUD_END
-
 int srs_trumedia_open(int port_id, int copp_idx, __s32 srs_tech_id,
 		      void *srs_params)
 {

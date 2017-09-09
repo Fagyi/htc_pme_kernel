@@ -600,7 +600,6 @@ struct mmc_host {
 	} perf;
 	bool perf_enable;
 
-
 	struct mmc_trace_buffer trace_buf;
 	enum dev_state dev_status;
 	bool			wakeup_on_idle;

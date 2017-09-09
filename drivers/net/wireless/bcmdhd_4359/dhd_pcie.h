@@ -232,6 +232,9 @@ typedef struct dhd_bus {
 	struct work_struct cleanup_flow_work;
 #endif
 
+	uint32 irq_record_time;
+	uint32 irq_lastintrs;
+	uint32 irq_intrcount;
 } dhd_bus_t;
 
 /* function declarations */

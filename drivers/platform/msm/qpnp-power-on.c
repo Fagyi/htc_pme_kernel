@@ -31,7 +31,7 @@
 #include <linux/qpnp/power-on.h>
 #include <soc/qcom/rpm-smd.h>
 
-#include <../../power/reset/htc_restart_handler.h>
+#include "../../power/reset/htc_restart_handler.h"
 
 #define CREATE_MASK(NUM_BITS, POS) \
 	((unsigned char) (((1 << (NUM_BITS)) - 1) << (POS)))
@@ -156,6 +156,10 @@
 #define QPNP_PON_BUFFER_SIZE			9
 
 #define QPNP_POFF_REASON_UVLO			13
+
+#ifdef CONFIG_SWEEP2SLEEP
+extern void sweep2sleep_setdev(struct input_dev * input_device);
+#endif
 
 enum qpnp_pon_version {
 	QPNP_PON_GEN1_V1,
@@ -1872,6 +1876,11 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 				"Can't register pon key: %d\n", rc);
 			goto free_input_dev;
 		}
+#ifdef CONFIG_SWEEP2SLEEP
+		else {
+			sweep2sleep_setdev(pon->pon_input);
+		}
+#endif
 	}
 
 	for (i = 0; i < pon->num_pon_config; i++) {

@@ -493,7 +493,7 @@ dhdpcie_bus_intstatus(dhd_bus_t *bus)
 				struct irq_desc *desc;
 
 				desc = irq_to_desc(bus->dev->irq);
-				if (desc->depth == 0) {
+				if (desc != NULL && desc->depth == 0) {
 					DHD_INTR(("%s disable_irq_nosync irq=%d\n", __FUNCTION__,
 						bus->dev->irq));
 					disable_irq_nosync(bus->dev->irq);
@@ -542,13 +542,40 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 			break;
 		}
 
-#ifndef CUSTOMER_HW_ONE
+#ifdef CUSTOMER_HW_ONE
+		bus->irq_intrcount++;
+		if (bus->irq_lastintrs == 0) {
+			bus->irq_lastintrs = bus->irq_intrcount;
+			bus->irq_record_time = ((uint32)jiffies_to_msecs(jiffies));
+		} else {
+			if ((((uint32)jiffies_to_msecs(jiffies)) - bus->irq_record_time) > 1000 ) {
+				uint32 intrdiff = bus->irq_intrcount - bus->irq_lastintrs;
+				DHD_INFO(("%s : intr DIFF is %d\n",
+							__FUNCTION__, intrdiff));
+				if (intrdiff > 10000) {
+					
+					if (bus && bus->dev && bus->dev->irq) {
+						struct irq_desc *desc;
+						desc = irq_to_desc(bus->dev->irq);
+						if (desc->depth == 0) {
+							DHD_INTR(("%s disable_irq_nosync irq=%d\n", __FUNCTION__,
+										bus->dev->irq));
+							disable_irq_nosync(bus->dev->irq);
+							bus->intdis = TRUE;
+						}
+					}
+					dhd_os_send_hang_message(bus->dhd);
+				}
+				bus->irq_lastintrs = bus->irq_intrcount = 0;
+			}
+		}
+#endif 
+
 		if (bus->dhd->busstate == DHD_BUS_DOWN) {
 			DHD_ERROR(("%s: BUS is down, not processing the interrupt \r\n",
 				__FUNCTION__));
 			break;
 		}
-#endif /* CUSTOMER_HW_ONE */
 
 		intstatus = dhdpcie_bus_intstatus(bus);
 
@@ -749,6 +776,9 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 	bus->wait_for_d3_ack = 1;
 	bus->suspended = FALSE;
 	bus->force_suspend = 0;
+	bus->irq_intrcount = 0;
+	bus->irq_lastintrs = 0;
+	bus->irq_record_time = 0;
 
 #ifdef PCIE_OOB
 	gpio_handle_val = get_handle(OOB_PORT);
@@ -810,7 +840,7 @@ dhdpcie_bus_intr_enable(dhd_bus_t *bus)
 #ifdef CUSTOMER_HW_ONE
 		if (bus && bus->dev && bus->dev->irq) {
 			struct irq_desc *desc = irq_to_desc(bus->dev->irq);
-			if (desc->depth > 0) {
+			if (desc != NULL && desc->depth > 0) {
 				DHD_INTR(("%s enable_irq irq=%d\n", __FUNCTION__,
 					bus->dev->irq));
 				enable_irq(bus->dev->irq);
@@ -4089,8 +4119,15 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			} /* bus->wait_for_d3_ack was 0 */
 		}
 
-		/* To allow threads that got pre-empted to complete.
-		 */
+		if (dhd_query_bus_erros(bus->dhd)) {
+			return BCME_ERROR;
+		}
+		/* To allow threads that got pre-empted to complete. */
+		if(bus->islinkdown) {
+			DHD_ERROR(("%s: PCIe link was down\n", __FUNCTION__));
+			return BCME_ERROR;
+		}
+
 		while ((active = dhd_os_check_wakelock_all(bus->dhd)) &&
 			(idle_retry < MAX_WKLK_IDLE_CHECK)) {
 			msleep(1);

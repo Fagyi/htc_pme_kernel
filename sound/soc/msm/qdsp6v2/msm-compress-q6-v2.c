@@ -86,6 +86,10 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 struct wake_lock compr_lpa_q6_cb_wakelock;
 //HTC_AUD_END
 
+//HTC_AUD_START
+struct wake_lock compr_lpa_q6_cb_wakelock;
+//HTC_AUD_END
+
 struct msm_compr_gapless_state {
 	bool set_next_stream_id;
 	int32_t stream_opened[MAX_NUMBER_OF_STREAMS];
@@ -98,7 +102,8 @@ struct msm_compr_gapless_state {
 
 static unsigned int supported_sample_rates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000,
-	88200, 96000, 176400, 192000
+	88200, 96000, 128000, 144000, 176400, 192000, 352800, 384000, 2822400,
+	5644800
 };
 
 struct msm_compr_pdata {

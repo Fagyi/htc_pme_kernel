@@ -629,7 +629,7 @@ typedef struct dhd_pub {
 	uint32 new_tx_completed_count;
 	uint32 xmit_count;
 	uint32 xmit_record_time;
-	bool xmit_hang_possible;
+	
 	/* HTC_WIFI_END */
 #endif /* CUSTOMER_HW_ONE */
 } dhd_pub_t;
@@ -886,7 +886,7 @@ inline static void MUTEX_UNLOCK_SOFTAP_SET(dhd_pub_t * dhdp)
 #define DHD_OS_OOB_IRQ_WAKE_LOCK_TIMEOUT(pub, val)	dhd_os_oob_irq_wake_lock_timeout(pub, val)
 #define DHD_OS_OOB_IRQ_WAKE_UNLOCK(pub)			dhd_os_oob_irq_wake_unlock(pub)
 #endif /* BCMPCIE_OOB_HOST_WAKE */
-#define DHD_PACKET_TIMEOUT_MS	50
+#define DHD_PACKET_TIMEOUT_MS	500
 #define DHD_EVENT_TIMEOUT_MS	1500
 
 /* Enum for IOCTL recieved status */

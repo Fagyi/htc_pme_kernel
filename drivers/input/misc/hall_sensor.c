@@ -32,6 +32,12 @@
 
 #define DRIVER_NAME "HL"
 
+<<<<<<< HEAD
+=======
+bool disable_cover = 0;
+module_param(disable_cover, bool, 0644);
+
+>>>>>>> f955251843f15cc897cc4391e971f0e8aa08bf3e
 struct ak_hall_data {
 	struct input_dev *input_dev;
 	uint32_t gpio_att:16;
@@ -257,6 +263,12 @@ static void report_cover_event(int pole, int irq, struct ak_hall_data *hl)
 {
 	uint8_t val_n = 0, val_s = 0;
 
+<<<<<<< HEAD
+=======
+	if (disable_cover)
+		return;
+
+>>>>>>> f955251843f15cc897cc4391e971f0e8aa08bf3e
 	if(pole == HALL_POLE_N) // N-pole
 	{
 		val_n = gpio_get_value(hl->gpio_att);

@@ -382,6 +382,7 @@ struct qpnp_hap {
 	u8 ext_pwm_dtest_line;
 	bool soft_mode_enable;
 	bool vcc_pon_enabled;
+	bool soft_mode_enable;
 	bool state;
 	bool use_play_irq;
 	bool use_sc_irq;
