@@ -380,7 +380,6 @@ struct qpnp_hap {
 	u8 lra_res_cal_period;
 	u8 sc_duration;
 	u8 ext_pwm_dtest_line;
-	bool soft_mode_enable;
 	bool vcc_pon_enabled;
 	bool soft_mode_enable;
 	bool state;

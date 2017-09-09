@@ -13396,8 +13396,6 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 		goto err;
 	}
 
-//HTC_AUD_START
-#ifdef CONFIG_USE_CODEC_MBHC
 	supply = tasha_codec_find_ondemand_regulator(codec,
 		on_demand_supply_name[ON_DEMAND_MICBIAS]);
 	if (supply) {
