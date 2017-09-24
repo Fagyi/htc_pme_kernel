@@ -4320,7 +4320,7 @@ static int android_bind(struct usb_composite_dev *cdev)
 	/* Default strings - should be updated by userspace */
 	strlcpy(manufacturer_string, "HTC", /*++ 2015/07/16 USB Team, PCN00018 ++*/
 		sizeof(manufacturer_string) - 1);
-	strlcpy(product_string, "Android Phone", sizeof(product_string) - 1); /*++ 2015/07/16 USB Team, PCN00018 ++*/
+	strlcpy(product_string, "HTC 10", sizeof(product_string) - 1); /*++ 2015/07/16 USB Team, PCN00018 ++*/
 	strlcpy(serial_string, "0123456789ABCDEF", sizeof(serial_string) - 1);
 
 	id = usb_string_id(cdev);
