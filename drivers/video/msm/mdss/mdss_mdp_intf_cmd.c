@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +21,6 @@
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 #include "mdss_dsi_clk.h"
-#include <linux/interrupt.h>
 
 #define MAX_RECOVERY_TRIALS 10
 #define MAX_SESSIONS 2
@@ -1881,13 +1880,9 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 	struct mdss_mdp_cmd_ctx *ctx;
 	struct mdss_panel_data *pdata;
 	unsigned long flags;
-<<<<<<< HEAD
 	int rc = 0;
 	u32 status;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-=======
-	int rc = 0, te_irq;
->>>>>>> LA.UM.5.6.r1-06100-89xx.0
 
 	ctx = (struct mdss_mdp_cmd_ctx *) ctl->intf_ctx[MASTER_CTX];
 	if (!ctx) {
@@ -1940,6 +1935,7 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 			status = readl_relaxed(mdata->mdp_base +
 				MDSS_REG_HW_INTR2_STATUS);
 			pr_err("TE ISR status 0x%x\n", status);
+
 			MDSS_XLOG(0xbad);
 			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl", "dsi0_phy",
 				"dsi1_ctrl", "dsi1_phy", "vbif", "vbif_nrt",
@@ -1951,10 +1947,6 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 				"dbg_bus", "vbif_dbg_bus", "panic");
 			mdss_fb_report_panel_dead(ctl->mfd);
 		}
-
-		/* disable te irq */
-		disable_irq_nosync(te_irq);
-
 		ctx->pp_timeout_report_cnt++;
 		rc = -EPERM;
 
