@@ -5,6 +5,7 @@ config SND_SOC_MSM_HOSTLESS_PCM
 
 config SND_SOC_MSM_QDSP6V2_INTF
 	bool "SoC Q6 audio driver for APQ8084"
+	depends on MSM_QDSP6_APRV2
 	help
 	 To add support for SoC audio on APQ8084.
 	 This will enable all the platform specific
@@ -215,8 +216,8 @@ config USE_CODEC_MBHC
 #HTC_AUD_END
 
 config SND_SOC_MDMCALIFORNIUM
-        tristate "SoC Machine driver for MDMCALIFORNIUM or SDXHEDGEHOG boards"
-        depends on ARCH_MDMCALIFORNIUM || ARCH_SDXHEDGEHOG
+        tristate "SoC Machine driver for MDMCALIFORNIUM boards"
+        depends on ARCH_MDMCALIFORNIUM
         select SND_SOC_QDSP6V2
         select SND_SOC_MSM_STUB
         select SND_SOC_MSM_HOSTLESS_PCM
@@ -225,10 +226,9 @@ config SND_SOC_MDMCALIFORNIUM
         select MSM_QDSP6V2_CODECS
         select SND_SOC_WCD9335
         select SND_SOC_WSA881X
-        select SND_SOC_TLV320AIC3X
         select SND_HWDEP
         help
-         To add support for SoC audio on MDMCALIFORNIUM or HEDGEHOG.
+         To add support for SoC audio on MDMCALIFORNIUM.
          This will enable sound soc drivers which
          interfaces with DSP, also it will enable
          the machine driver and the corresponding
@@ -264,11 +264,7 @@ config SND_SOC_MSM8909
 	select MSM_QDSP6V2_CODECS
 	select SND_SOC_MSM8X16_WCD
 	select SND_SOC_WSA881X_ANALOG
-	select SND_SOC_WSA881X
-	select SND_SOC_WCD9335
-        select SND_SOC_CPE
 	select SND_HWDEP
-	select QTI_PP
 	help
 	 To add support for SoC audio on MSM8909 boards.
 	 This will enable sound soc drivers which
