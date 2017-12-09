@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,20 +30,10 @@
 #include <soc/qcom/socinfo.h>
 #include <qdsp6v2/msm-pcm-routing-v2.h>
 #include <sound/q6core.h>
-#include "../codecs/wcd9xxx-common.h"
-#include "../codecs/wcd9335.h"
-#include "../codecs/wsa881x.h"
+#include <../codecs/tlv320aic3x.h>
 
-/* Spk control */
-#define MDM_SPK_ON 1
-#define MDM_HIFI_ON    1
-
-#define WCD9XXX_MBHC_DEF_BUTTONS 8
-#define WCD9XXX_MBHC_DEF_RLOADS 5
 /*
- * MDM9650 run Tasha at 12.288 Mhz.
- * At present MDM supports 12.288mhz
- * only. Tasha supports 9.6 MHz also.
+ * MDM9650 runs TLV320AIC3X at 12.288 Mhz.
  */
 #define MDM_MCLK_CLK_12P288MHZ 12288000
 #define MDM_MCLK_CLK_9P6HZ 9600000
@@ -76,7 +66,7 @@
 #define CLOCK_OFF 0
 
 /* Machine driver Name*/
-#define DRV_NAME "mdm9650-asoc-tasha"
+#define DRV_NAME "mdm9650-asoc-auto"
 
 enum mi2s_pcm_mux {
 	PRI_MI2S_PCM,
@@ -91,9 +81,6 @@ struct mdm_machine_data {
 	u16 prim_auxpcm_mode;
 	u16 sec_auxpcm_mode;
 	u32 prim_clk_usrs;
-	int hph_en1_gpio;
-	int hph_en0_gpio;
-	struct snd_info_entry *codec_root;
 };
 
 static const struct afe_clk_cfg lpass_default = {
@@ -106,21 +93,12 @@ static const struct afe_clk_cfg lpass_default = {
 	0,
 };
 
-struct mdm_wsa881x_dev_info {
-	struct device_node *of_node;
-	u32 index;
-};
-
-static struct snd_soc_aux_dev *mdm_aux_dev;
-static struct snd_soc_codec_conf *mdm_codec_conf;
-
 static int mdm_auxpcm_rate = 8000;
 static void *lpaif_pri_muxsel_virt_addr;
 static void *lpaif_sec_muxsel_virt_addr;
 static void *lpass_gpio_mux_spkr_ctl_virt_addr;
 static void *lpass_gpio_mux_mic_ctl_virt_addr;
 
-static struct mutex cdc_mclk_mutex;
 static int mdm_mi2s_rx_ch = 1;
 static int mdm_mi2s_tx_ch = 1;
 static int mdm_sec_mi2s_rx_ch = 1;
@@ -130,74 +108,10 @@ static int mdm_mi2s_tx_rate = SAMPLE_RATE_48KHZ;
 static int mdm_sec_mi2s_rx_rate = SAMPLE_RATE_48KHZ;
 static int mdm_sec_mi2s_tx_rate = SAMPLE_RATE_48KHZ;
 
-static int mdm_spk_control = 1;
-static int mdm_hifi_control;
 static atomic_t mi2s_ref_count;
 static atomic_t sec_mi2s_ref_count;
 
-static int mdm_enable_codec_ext_clk(struct snd_soc_codec *codec,
-					int enable, bool dapm);
-
-static void *def_tasha_mbhc_cal(void);
 static void *adsp_state_notifier;
-
-static struct wcd_mbhc_config wcd_mbhc_cfg = {
-	.read_fw_bin = false,
-	.calibration = NULL,
-	.detect_extn_cable = true,
-	.mono_stero_detection = false,
-	.swap_gnd_mic = NULL,
-	.hs_ext_micbias = true,
-};
-
-static int mdm_wsa881x_init(struct snd_soc_component *component)
-{
-	u8 spkleft_ports[WSA881X_MAX_SWR_PORTS] = {100, 101, 102, 106};
-	u8 spkright_ports[WSA881X_MAX_SWR_PORTS] = {103, 104, 105, 107};
-	unsigned int ch_rate[WSA881X_MAX_SWR_PORTS] = {2400, 600, 300, 1200};
-	unsigned int ch_mask[WSA881X_MAX_SWR_PORTS] = {0x1, 0xF, 0x3, 0x3};
-	struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
-	struct mdm_machine_data *pdata;
-	struct snd_soc_dapm_context *dapm;
-
-	if (!codec) {
-		pr_err("%s codec is NULL\n", __func__);
-		return -EINVAL;
-	}
-
-	dapm = &codec->dapm;
-
-	if (!strcmp(component->name_prefix, "SpkrLeft")) {
-		dev_dbg(codec->dev, "%s: setting left ch map to codec %s\n",
-			__func__, codec->component.name);
-		wsa881x_set_channel_map(codec, &spkleft_ports[0],
-				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
-				&ch_rate[0]);
-		if (dapm->component) {
-			snd_soc_dapm_ignore_suspend(dapm, "SpkrLeft IN");
-			snd_soc_dapm_ignore_suspend(dapm, "SpkrLeft SPKR");
-		}
-	} else if (!strcmp(component->name_prefix, "SpkrRight")) {
-		dev_dbg(codec->dev, "%s: setting right ch map to codec %s\n",
-			__func__, codec->component.name);
-		wsa881x_set_channel_map(codec, &spkright_ports[0],
-				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
-				&ch_rate[0]);
-		if (dapm->component) {
-			snd_soc_dapm_ignore_suspend(dapm, "SpkrRight IN");
-			snd_soc_dapm_ignore_suspend(dapm, "SpkrRight SPKR");
-		}
-	} else {
-		dev_err(codec->dev, "%s: wrong codec name %s\n", __func__,
-			codec->component.name);
-		return -EINVAL;
-	}
-	pdata = snd_soc_card_get_drvdata(component->card);
-	if (pdata && pdata->codec_root)
-		wsa881x_codec_info_create_codec_entry(pdata->codec_root, codec);
-
-	return 0;
-}
 
 static int mdm_mi2s_clk_ctl(struct snd_soc_pcm_runtime *rtd, bool enable)
 {
@@ -221,13 +135,13 @@ static int mdm_mi2s_clk_ctl(struct snd_soc_pcm_runtime *rtd, bool enable)
 	pr_debug("%s enable = %x\n", __func__, enable);
 
 	if (enable) {
-		lpass_clk->clk_set_mode = Q6AFE_LPASS_MODE_CLK1_VALID;
 		ret = afe_set_lpass_clock(MI2S_RX, lpass_clk);
 		if (ret < 0)
 			pr_err("%s:afe_set_lpass_clock failed\n", __func__);
 	} else {
-		lpass_clk->clk_set_mode = Q6AFE_LPASS_MODE_CLK1_VALID;
+		lpass_clk->clk_set_mode = Q6AFE_LPASS_MODE_BOTH_VALID;
 		lpass_clk->clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
+		lpass_clk->clk_val2 = Q6AFE_LPASS_OSR_CLK_DISABLE;
 		ret = afe_set_lpass_clock(MI2S_RX, lpass_clk);
 		if (ret < 0)
 			pr_err("%s:afe_set_lpass_clock failed\n", __func__);
@@ -320,40 +234,25 @@ static int mdm_mi2s_startup(struct snd_pcm_substream *substream)
 				goto err;
 			}
 			ret = snd_soc_dai_set_fmt(codec_dai,
-					SND_SOC_DAIFMT_CBS_CFS);
+					SND_SOC_DAIFMT_CBS_CFS |
+					SND_SOC_DAIFMT_I2S);
 			if (ret < 0) {
 				mdm_mi2s_clk_ctl(rtd, false);
 				dev_err(card->dev, "%s Set fmt for codec dai failed\n",
 					__func__);
 			}
-		} else if (pdata->prim_mi2s_mode == 0) {
-			/*
-			 * Disable bit clk in slave mode for QC codec.
-			 * Enable only mclk.
-			 */
-			ret = mdm_mi2s_clk_ctl(rtd, false);
-			if (ret < 0) {
-				dev_err(card->dev,
-					"%s clock enable failed\n", __func__);
-				goto err;
-			}
-			ret = snd_soc_dai_set_fmt(cpu_dai,
-					SND_SOC_DAIFMT_CBM_CFM);
-			if (ret < 0) {
-				dev_err(card->dev, "%s Set fmt for cpu dai failed\n",
-					__func__);
-				goto err;
-			}
-			ret = snd_soc_dai_set_fmt(codec_dai,
-					SND_SOC_DAIFMT_CBM_CFM);
-			if (ret < 0)
-				dev_err(card->dev, "%s Set fmt for codec dai failed\n",
-					__func__);
 		} else {
 			dev_err(card->dev, "%s Invalid primary mi2s mode\n",
 					__func__);
 			ret = -EINVAL;
 		}
+		/* Set the mclk as the sysclk for the codec dai */
+		ret = snd_soc_dai_set_sysclk(codec_dai,
+				CLKIN_MCLK,
+				pdata->mclk_freq, SND_SOC_CLOCK_OUT);
+		if (ret < 0)
+			pr_err("%s Set sysclk for codec dai failed\n",
+				__func__);
 err:
 		if (ret)
 			atomic_dec_return(&mi2s_ref_count);
@@ -412,6 +311,7 @@ static void mdm_sec_mi2s_shutdown(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	int ret;
+
 	if (atomic_dec_return(&sec_mi2s_ref_count) == 0) {
 		ret = mdm_sec_mi2s_clk_ctl(rtd, false);
 		if (ret < 0)
@@ -786,118 +686,6 @@ static int mdm_sec_mi2s_tx_ch_put(struct snd_kcontrol *kcontrol,
 	return 1;
 }
 
-
-static int mdm_mi2s_get_spk(struct snd_kcontrol *kcontrol,
-		       struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s mdm_spk_control %d", __func__, mdm_spk_control);
-
-	ucontrol->value.integer.value[0] = mdm_spk_control;
-	return 0;
-}
-
-static void mdm_ext_control(struct snd_soc_codec *codec)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-
-	pr_debug("%s mdm_spk_control %d", __func__, mdm_spk_control);
-
-	mutex_lock(&codec->mutex);
-	if (mdm_spk_control == MDM_SPK_ON) {
-		snd_soc_dapm_enable_pin(dapm, "Lineout_1 amp");
-		snd_soc_dapm_enable_pin(dapm, "Lineout_2 amp");
-	} else {
-		snd_soc_dapm_disable_pin(dapm, "Lineout_1 amp");
-		snd_soc_dapm_disable_pin(dapm, "Lineout_2 amp");
-	}
-	mutex_unlock(&codec->mutex);
-	snd_soc_dapm_sync(dapm);
-}
-
-static int mdm_mi2s_set_spk(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-
-	pr_debug("%s()\n", __func__);
-
-	if (mdm_spk_control == ucontrol->value.integer.value[0])
-		return 0;
-	mdm_spk_control = ucontrol->value.integer.value[0];
-	mdm_ext_control(codec);
-	return 1;
-}
-
-static int mdm_hifi_ctrl(struct snd_soc_codec *codec)
-{
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-	struct snd_soc_card *card = codec->component.card;
-	struct mdm_machine_data *pdata =
-				snd_soc_card_get_drvdata(card);
-
-	pr_debug("%s: mdm_hifi_control = %d", __func__,
-		 mdm_hifi_control);
-	if (pdata->hph_en1_gpio < 0) {
-		pr_err("%s: hph_en1_gpio is invalid\n", __func__);
-		return -EINVAL;
-	}
-	mutex_lock(&codec->mutex);
-	if (mdm_hifi_control == MDM_HIFI_ON) {
-		gpio_direction_output(pdata->hph_en1_gpio, 1);
-		/* 5msec delay needed as per HW requirement */
-		usleep_range(5000, 5010);
-	} else {
-		gpio_direction_output(pdata->hph_en1_gpio, 0);
-	}
-	mutex_unlock(&codec->mutex);
-	snd_soc_dapm_sync(dapm);
-	return 0;
-}
-
-static int mdm_hifi_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s: mdm_hifi_control = %d\n",
-			 __func__, mdm_hifi_control);
-	ucontrol->value.integer.value[0] = mdm_hifi_control;
-	return 0;
-}
-
-static int mdm_hifi_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-
-	pr_debug("%s() ucontrol->value.integer.value[0] = %ld\n",
-		 __func__, ucontrol->value.integer.value[0]);
-
-	mdm_hifi_control = ucontrol->value.integer.value[0];
-	mdm_hifi_ctrl(codec);
-	return 1;
-}
-
-static int mdm_enable_codec_ext_clk(struct snd_soc_codec *codec,
-					int enable, bool dapm)
-{
-	tasha_cdc_mclk_enable(codec, enable, dapm);
-
-	return 0;
-}
-
-static int mdm_mclk_event(struct snd_soc_dapm_widget *w,
-			      struct snd_kcontrol *kcontrol, int event)
-{
-	pr_debug("%s event %d\n", __func__, event);
-
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		return mdm_enable_codec_ext_clk(w->codec, 1, true);
-	case SND_SOC_DAPM_POST_PMD:
-		return mdm_enable_codec_ext_clk(w->codec, 0, true);
-	}
-	return 0;
-}
-
 static int mdm_auxpcm_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
@@ -1032,41 +820,6 @@ static int mdm_auxpcm_be_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
-static const struct snd_soc_dapm_widget mdm9650_dapm_widgets[] = {
-
-	SND_SOC_DAPM_SUPPLY("MCLK",  SND_SOC_NOPM, 0, 0,
-	mdm_mclk_event, SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
-
-	SND_SOC_DAPM_SPK("Lineout_1 amp", NULL),
-	SND_SOC_DAPM_SPK("Lineout_3 amp", NULL),
-	SND_SOC_DAPM_SPK("Lineout_2 amp", NULL),
-	SND_SOC_DAPM_SPK("Lineout_4 amp", NULL),
-	SND_SOC_DAPM_MIC("Handset Mic", NULL),
-	SND_SOC_DAPM_MIC("Headset Mic", NULL),
-	SND_SOC_DAPM_MIC("ANCRight Headset Mic", NULL),
-	SND_SOC_DAPM_MIC("ANCLeft Headset Mic", NULL),
-	SND_SOC_DAPM_MIC("Analog Mic4", NULL),
-	SND_SOC_DAPM_MIC("Analog Mic6", NULL),
-	SND_SOC_DAPM_MIC("Analog Mic7", NULL),
-	SND_SOC_DAPM_MIC("Analog Mic8", NULL),
-
-	SND_SOC_DAPM_MIC("Digital Mic1", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic2", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic3", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic4", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic5", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic6", NULL),
-};
-
-static struct snd_soc_dapm_route wcd9335_audio_paths[] = {
-	{"MIC BIAS1", NULL, "MCLK"},
-	{"MIC BIAS2", NULL, "MCLK"},
-	{"MIC BIAS3", NULL, "MCLK"},
-	{"MIC BIAS4", NULL, "MCLK"},
-};
-
-static const char *const spk_function[] = {"Off", "On"};
-static const char *const hifi_function[] = {"Off", "On"};
 static const char *const mi2s_rx_ch_text[] = {"One", "Two"};
 static const char *const mi2s_tx_ch_text[] = {"One", "Two"};
 static const char *const auxpcm_rate_text[] = {"rate_8000", "rate_16000"};
@@ -1077,61 +830,48 @@ static const char *const mi2s_tx_rate_text[] = {"rate_8000",
 						"rate_16000", "rate_48000"};
 
 static const struct soc_enum mdm_enum[] = {
-	SOC_ENUM_SINGLE_EXT(2, spk_function),
 	SOC_ENUM_SINGLE_EXT(2, mi2s_rx_ch_text),
 	SOC_ENUM_SINGLE_EXT(2, mi2s_tx_ch_text),
 	SOC_ENUM_SINGLE_EXT(2, auxpcm_rate_text),
 	SOC_ENUM_SINGLE_EXT(3, mi2s_rx_rate_text),
 	SOC_ENUM_SINGLE_EXT(3, mi2s_tx_rate_text),
-	SOC_ENUM_SINGLE_EXT(2, hifi_function),
 };
 
 static const struct snd_kcontrol_new mdm_snd_controls[] = {
-	SOC_ENUM_EXT("Speaker Function",   mdm_enum[0],
-				 mdm_mi2s_get_spk,
-				 mdm_mi2s_set_spk),
-	SOC_ENUM_EXT("MI2S_RX Channels",   mdm_enum[1],
+	SOC_ENUM_EXT("MI2S_RX Channels",   mdm_enum[0],
 				 mdm_mi2s_rx_ch_get,
 				 mdm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("MI2S_TX Channels",   mdm_enum[2],
+	SOC_ENUM_EXT("MI2S_TX Channels",   mdm_enum[1],
 				 mdm_mi2s_tx_ch_get,
 				 mdm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("AUX PCM SampleRate", mdm_enum[3],
+	SOC_ENUM_EXT("AUX PCM SampleRate", mdm_enum[2],
 				 mdm_auxpcm_rate_get,
 				 mdm_auxpcm_rate_put),
-	SOC_ENUM_EXT("MI2S Rx SampleRate", mdm_enum[4],
+	SOC_ENUM_EXT("MI2S Rx SampleRate", mdm_enum[3],
 				 mdm_mi2s_rx_rate_get,
 				 mdm_mi2s_rx_rate_put),
-	SOC_ENUM_EXT("MI2S Tx SampleRate", mdm_enum[5],
+	SOC_ENUM_EXT("MI2S Tx SampleRate", mdm_enum[4],
 				 mdm_mi2s_tx_rate_get,
 				 mdm_mi2s_tx_rate_put),
-	SOC_ENUM_EXT("SEC_MI2S_RX Channels",   mdm_enum[1],
+	SOC_ENUM_EXT("SEC_MI2S_RX Channels",   mdm_enum[0],
 				 mdm_sec_mi2s_rx_ch_get,
 				 mdm_sec_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("SEC_MI2S_TX Channels",   mdm_enum[2],
+	SOC_ENUM_EXT("SEC_MI2S_TX Channels",   mdm_enum[1],
 				 mdm_sec_mi2s_tx_ch_get,
 				 mdm_sec_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("SEC MI2S Rx SampleRate", mdm_enum[4],
+	SOC_ENUM_EXT("SEC MI2S Rx SampleRate", mdm_enum[3],
 				 mdm_sec_mi2s_rx_rate_get,
 				 mdm_sec_mi2s_rx_rate_put),
-	SOC_ENUM_EXT("SEC MI2S Tx SampleRate", mdm_enum[5],
+	SOC_ENUM_EXT("SEC MI2S Tx SampleRate", mdm_enum[4],
 				 mdm_sec_mi2s_tx_rate_get,
 				 mdm_sec_mi2s_tx_rate_put),
-	SOC_ENUM_EXT("HiFi Function", mdm_enum[6],
-				 mdm_hifi_get,
-				 mdm_hifi_put),
 };
 
 static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
 	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	struct snd_card *card;
-	struct snd_info_entry *entry;
-	struct mdm_machine_data *pdata =
-				snd_soc_card_get_drvdata(rtd->card);
 
 	pr_debug("%s dev_name %s\n", __func__, dev_name(cpu_dai->dev));
 
@@ -1144,128 +884,8 @@ static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		goto done;
 	}
 
-	snd_soc_dapm_new_controls(dapm, mdm9650_dapm_widgets,
-				  ARRAY_SIZE(mdm9650_dapm_widgets));
-
-	snd_soc_dapm_add_routes(dapm, wcd9335_audio_paths,
-				ARRAY_SIZE(wcd9335_audio_paths));
-
-	/*
-	 * After DAPM Enable pins always
-	 * DAPM SYNC needs to be called.
-	 */
-	snd_soc_dapm_enable_pin(dapm, "Lineout_1 amp");
-	snd_soc_dapm_enable_pin(dapm, "Lineout_3 amp");
-	snd_soc_dapm_enable_pin(dapm, "Lineout_2 amp");
-	snd_soc_dapm_enable_pin(dapm, "Lineout_4 amp");
-
-	snd_soc_dapm_ignore_suspend(dapm, "Lineout_1 amp");
-	snd_soc_dapm_ignore_suspend(dapm, "Lineout_3 amp");
-	snd_soc_dapm_ignore_suspend(dapm, "Lineout_2 amp");
-	snd_soc_dapm_ignore_suspend(dapm, "Lineout_4 amp");
-	snd_soc_dapm_ignore_suspend(dapm, "ultrasound amp");
-	snd_soc_dapm_ignore_suspend(dapm, "Handset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "Headset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "ANCRight Headset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "ANCLeft Headset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic1");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic2");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic3");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic4");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic5");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic6");
-
-	snd_soc_dapm_ignore_suspend(dapm, "MADINPUT");
-	snd_soc_dapm_ignore_suspend(dapm, "MAD_CPE_INPUT");
-	snd_soc_dapm_ignore_suspend(dapm, "EAR");
-	snd_soc_dapm_ignore_suspend(dapm, "HEADPHONE");
-	snd_soc_dapm_ignore_suspend(dapm, "LINEOUT1");
-	snd_soc_dapm_ignore_suspend(dapm, "LINEOUT2");
-	snd_soc_dapm_ignore_suspend(dapm, "LINEOUT3");
-	snd_soc_dapm_ignore_suspend(dapm, "LINEOUT4");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK_OUT");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC HEADPHONE");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC EAR");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC1");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC2");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC3");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC4");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC5");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC6");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC1");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC2");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC3");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC4");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC5");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic0");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC0");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK1 OUT");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK2 OUT");
-	snd_soc_dapm_ignore_suspend(dapm, "AIF4 VI");
-	snd_soc_dapm_ignore_suspend(dapm, "VIINPUT");
-	snd_soc_dapm_ignore_suspend(dapm, "HPHL");
-	snd_soc_dapm_ignore_suspend(dapm, "HPHR");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHL");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHR");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC LINEOUT1");
-	snd_soc_dapm_ignore_suspend(dapm, "ANC LINEOUT2");
-
-	snd_soc_dapm_sync(dapm);
-
-	wcd_mbhc_cfg.calibration = def_tasha_mbhc_cal();
-	if (wcd_mbhc_cfg.calibration)
-		ret = tasha_mbhc_hs_detect(codec, &wcd_mbhc_cfg);
-	else
-		ret = -ENOMEM;
-
-	card = rtd->card->snd_card;
-	entry = snd_register_module_info(card->module,
-					 "codecs",
-					 card->proc_root);
-	if (!entry) {
-		pr_debug("%s: Cannot create codecs module entry\n",
-			 __func__);
-		ret = 0;
-		goto done;
-	}
-	pdata->codec_root = entry;
-	tasha_codec_info_create_codec_entry(pdata->codec_root, codec);
 done:
 	return ret;
-}
-
-static void *def_tasha_mbhc_cal(void)
-{
-	void *tasha_wcd_cal;
-	struct wcd_mbhc_btn_detect_cfg *btn_cfg;
-	u16 *btn_high;
-
-	tasha_wcd_cal = kzalloc(WCD_MBHC_CAL_SIZE(WCD_MBHC_DEF_BUTTONS,
-				WCD9XXX_MBHC_DEF_RLOADS), GFP_KERNEL);
-	if (!tasha_wcd_cal)
-		return NULL;
-
-#define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(tasha_wcd_cal)->X) = (Y))
-	S(v_hs_max, 1500);
-#undef S
-#define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(tasha_wcd_cal)->X) = (Y))
-	S(num_btn, WCD_MBHC_DEF_BUTTONS);
-#undef S
-
-	btn_cfg = WCD_MBHC_CAL_BTN_DET_PTR(tasha_wcd_cal);
-	btn_high = ((void *)&btn_cfg->_v_btn_low) +
-		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
-
-	btn_high[0] = 75;
-	btn_high[1] = 150;
-	btn_high[2] = 237;
-	btn_high[3] = 450;
-	btn_high[4] = 500;
-	btn_high[5] = 590;
-	btn_high[6] = 675;
-	btn_high[7] = 780;
-
-	return tasha_wcd_cal;
 }
 
 /* Digital audio interface connects codec <---> CPU */
@@ -1636,8 +1256,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.stream_name = "Primary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.0",
 		.platform_name = "msm-pcm-routing",
-		.codec_name = "tasha_codec",
-		.codec_dai_name = "tasha_i2s_rx1",
+		.codec_name = "tlv320aic3x-codec",
+		.codec_dai_name = "tlv320aic3x-hifi",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.be_id = MSM_BACKEND_DAI_PRI_MI2S_RX,
@@ -1652,8 +1272,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.stream_name = "Primary MI2S Capture",
 		.cpu_dai_name = "msm-dai-q6-mi2s.0",
 		.platform_name = "msm-pcm-routing",
-		.codec_name = "tasha_codec",
-		.codec_dai_name = "tasha_i2s_tx1",
+		.codec_name = "tlv320aic3x-codec",
+		.codec_dai_name = "tlv320aic3x-hifi",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
 		.be_id = MSM_BACKEND_DAI_PRI_MI2S_TX,
@@ -1820,7 +1440,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 };
 
 static struct snd_soc_card snd_soc_card_mdm = {
-	.name = "mdm-tasha-i2s-snd-card",
+	.name = "mdm-auto-i2s-snd-card",
 	.dai_link = mdm_dai,
 	.num_links = ARRAY_SIZE(mdm_dai),
 };
@@ -1910,169 +1530,6 @@ static int mdm_populate_dai_link_component_of_node(
 
 err:
 	return ret;
-}
-
-
-static int mdm_init_wsa_dev(struct platform_device *pdev,
-				struct snd_soc_card *card)
-{
-	struct device_node *wsa_of_node;
-	u32 wsa_max_devs;
-	u32 wsa_dev_cnt;
-	char *dev_name_str = NULL;
-	struct mdm_wsa881x_dev_info *wsa881x_dev_info;
-	const char *wsa_auxdev_name_prefix[1];
-	int found = 0;
-	int i;
-	int ret;
-
-	/* Get maximum WSA device count for this platform */
-	ret = of_property_read_u32(pdev->dev.of_node,
-				   "qcom,wsa-max-devs", &wsa_max_devs);
-	if (ret) {
-		dev_dbg(&pdev->dev,
-			 "%s: wsa-max-devs property missing in DT %s, ret = %d\n",
-			 __func__, pdev->dev.of_node->full_name, ret);
-		return 0;
-	}
-	if (wsa_max_devs == 0) {
-		dev_warn(&pdev->dev,
-			 "%s: Max WSA devices is 0 for this target?\n",
-			 __func__);
-		return 0;
-	}
-
-	/* Get count of WSA device phandles for this platform */
-	wsa_dev_cnt = of_count_phandle_with_args(pdev->dev.of_node,
-						 "qcom,wsa-devs", NULL);
-	if (wsa_dev_cnt == -ENOENT) {
-		dev_dbg(&pdev->dev, "%s: No wsa device defined in DT.\n",
-			 __func__);
-		return 0;
-	} else if (wsa_dev_cnt <= 0) {
-		dev_err(&pdev->dev,
-			"%s: Error reading wsa device from DT. wsa_dev_cnt = %d\n",
-			__func__, wsa_dev_cnt);
-		return -EINVAL;
-	}
-
-	/*
-	 * Expect total phandles count to be NOT less than maximum possible
-	 * WSA count. However, if it is less, then assign same value to
-	 * max count as well.
-	 */
-	if (wsa_dev_cnt < wsa_max_devs) {
-		dev_dbg(&pdev->dev,
-			"%s: wsa_max_devs = %d cannot exceed wsa_dev_cnt = %d\n",
-			__func__, wsa_max_devs, wsa_dev_cnt);
-		wsa_max_devs = wsa_dev_cnt;
-	}
-
-	/* Make sure prefix string passed for each WSA device */
-	ret = of_property_count_strings(pdev->dev.of_node,
-					"qcom,wsa-aux-dev-prefix");
-	if (ret != wsa_dev_cnt) {
-		dev_err(&pdev->dev,
-			"%s: expecting %d wsa prefix. Defined only %d in DT\n",
-			__func__, wsa_dev_cnt, ret);
-		return -EINVAL;
-	}
-
-	/*
-	 * Alloc mem to store phandle and index info of WSA device, if already
-	 * registered with ALSA core
-	 */
-	wsa881x_dev_info = devm_kcalloc(&pdev->dev, wsa_max_devs,
-					sizeof(struct mdm_wsa881x_dev_info),
-					GFP_KERNEL);
-	if (!wsa881x_dev_info)
-		return -ENOMEM;
-
-	/*
-	 * search and check whether all WSA devices are already
-	 * registered with ALSA core or not. If found a node, store
-	 * the node and the index in a local array of struct for later
-	 * use.
-	 */
-	for (i = 0; i < wsa_dev_cnt; i++) {
-		wsa_of_node = of_parse_phandle(pdev->dev.of_node,
-					    "qcom,wsa-devs", i);
-		if (unlikely(!wsa_of_node)) {
-			/* we should not be here */
-			dev_err(&pdev->dev,
-				"%s: wsa dev node is not present\n",
-				__func__);
-			return -EINVAL;
-		}
-		if (soc_find_component(wsa_of_node, NULL)) {
-			/* WSA device registered with ALSA core */
-			wsa881x_dev_info[found].of_node = wsa_of_node;
-			wsa881x_dev_info[found].index = i;
-			found++;
-			if (found == wsa_max_devs)
-				break;
-		}
-	}
-
-	if (found < wsa_max_devs) {
-		dev_dbg(&pdev->dev,
-			"%s: failed to find %d components. Found only %d\n",
-			__func__, wsa_max_devs, found);
-		return -EPROBE_DEFER;
-	}
-	dev_info(&pdev->dev,
-		"%s: found %d wsa881x devices registered with ALSA core\n",
-		__func__, found);
-
-	card->num_aux_devs = wsa_max_devs;
-	card->num_configs = wsa_max_devs;
-
-	/* Alloc array of AUX devs struct */
-	mdm_aux_dev = devm_kcalloc(&pdev->dev, card->num_aux_devs,
-				       sizeof(struct snd_soc_aux_dev),
-				       GFP_KERNEL);
-	if (!mdm_aux_dev)
-		return -ENOMEM;
-
-	/* Alloc array of codec conf struct */
-	mdm_codec_conf = devm_kcalloc(&pdev->dev, card->num_aux_devs,
-					  sizeof(struct snd_soc_codec_conf),
-					  GFP_KERNEL);
-	if (!mdm_codec_conf)
-		return -ENOMEM;
-
-	for (i = 0; i < card->num_aux_devs; i++) {
-		dev_name_str = devm_kzalloc(&pdev->dev, DEV_NAME_STR_LEN,
-					    GFP_KERNEL);
-		if (!dev_name_str)
-			return -ENOMEM;
-
-		ret = of_property_read_string_index(pdev->dev.of_node,
-						    "qcom,wsa-aux-dev-prefix",
-						    wsa881x_dev_info[i].index,
-						    wsa_auxdev_name_prefix);
-		if (ret) {
-			dev_err(&pdev->dev,
-				"%s: failed to read wsa aux dev prefix, ret = %d\n",
-				__func__, ret);
-			return -EINVAL;
-		}
-
-		snprintf(dev_name_str, strlen("wsa881x.%d"), "wsa881x.%d", i);
-		mdm_aux_dev[i].name = dev_name_str;
-		mdm_aux_dev[i].codec_name = NULL;
-		mdm_aux_dev[i].codec_of_node =
-					wsa881x_dev_info[i].of_node;
-		mdm_aux_dev[i].init = mdm_wsa881x_init;
-		mdm_codec_conf[i].dev_name = NULL;
-		mdm_codec_conf[i].name_prefix = wsa_auxdev_name_prefix[0];
-		mdm_codec_conf[i].of_node =
-					wsa881x_dev_info[i].of_node;
-	}
-	card->codec_conf = mdm_codec_conf;
-	card->aux_dev = mdm_aux_dev;
-
-	return 0;
 }
 
 static int mdm_populate_mi2s_interface_mode(
@@ -2177,27 +1634,16 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 	if (!pdata)
 		return -ENOMEM;
 
-	ret = of_property_read_u32(pdev->dev.of_node,
-				   "qcom,tasha-mclk-clk-freq",
-				   &pdata->mclk_freq);
-	if (ret) {
-		dev_err(&pdev->dev,
-			"%s Looking up %s property in node %s failed",
-			__func__, "qcom,tasha-mclk-clk-freq",
-			pdev->dev.of_node->full_name);
-
-		goto err;
-	}
 	/* At present only 12.288MHz is supported on MDM. */
+	pdata->mclk_freq = MDM_MCLK_CLK_12P288MHZ;
 	if (q6afe_check_osr_clk_freq(pdata->mclk_freq)) {
-		dev_err(&pdev->dev, "%s Unsupported tasha mclk freq %u\n",
+		dev_err(&pdev->dev, "%s Unsupported mclk freq %u\n",
 			__func__, pdata->mclk_freq);
 
 		ret = -EINVAL;
 		goto err;
 	}
 
-	mutex_init(&cdc_mclk_mutex);
 	atomic_set(&mi2s_ref_count, 0);
 	atomic_set(&sec_mi2s_ref_count, 0);
 	pdata->prim_clk_usrs = 0;
@@ -2207,9 +1653,6 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 	snd_soc_card_set_drvdata(card, pdata);
 
 	ret = snd_soc_of_parse_card_name(card, "qcom,model");
-	if (ret)
-		goto err;
-	ret = snd_soc_of_parse_audio_routing(card, "qcom,audio-routing");
 	if (ret)
 		goto err;
 
@@ -2226,10 +1669,6 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err;
 	}
-
-	ret = mdm_init_wsa_dev(pdev, card);
-	if (ret)
-		goto err;
 
 	ret = snd_soc_register_card(card);
 	if (ret == -EPROBE_DEFER) {
@@ -2289,8 +1728,6 @@ static int mdm_asoc_machine_remove(struct platform_device *pdev)
 	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
 	pdata->mclk_freq = 0;
-	gpio_free(pdata->hph_en1_gpio);
-	gpio_free(pdata->hph_en0_gpio);
 	iounmap(lpaif_pri_muxsel_virt_addr);
 	iounmap(lpass_gpio_mux_spkr_ctl_virt_addr);
 	iounmap(lpaif_sec_muxsel_virt_addr);
@@ -2301,7 +1738,7 @@ static int mdm_asoc_machine_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id mdm_asoc_machine_of_match[]  = {
-	{ .compatible = "qcom,mdm-audio-tasha", },
+	{ .compatible = "qcom,mdm-audio-auto", },
 	{},
 };
 
@@ -2327,12 +1764,12 @@ static int dummy_machine_remove(struct platform_device *pdev)
 }
 
 static struct platform_device dummy_machine_device = {
-		.name = "dummymachinedriver",
+	.name = "dummymachinedriverauto",
 };
 
 static struct platform_driver mdm_asoc_machine_dummy_driver = {
 	.driver = {
-		.name = "dummymachinedriver",
+		.name = "dummymachinedriverauto",
 		.owner = THIS_MODULE,
 	},
 	.probe = dummy_machine_probe,
