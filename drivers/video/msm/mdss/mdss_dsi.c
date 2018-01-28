@@ -3422,7 +3422,7 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 			pr_err("%s: TE request_irq failed for ESD\n", __func__);
 			goto error_shadow_clk_deinit;
 		}
-		te_irq_registered = 1;
+		// te_irq_registered = 1;
 		disable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
 	}
 
